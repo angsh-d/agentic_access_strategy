@@ -31,13 +31,13 @@ function NavBar() {
             </svg>
           </div>
           <span className="text-sm font-semibold text-grey-900" style={{ letterSpacing: '-0.02em' }}>
-            Agentic Access
+            Access Strategy
           </span>
         </div>
 
         <div className="hidden md:flex items-center gap-8">
-          <a href="#features" className="text-xs text-grey-500 hover:text-grey-900 transition-colors duration-300" style={{ letterSpacing: '-0.003em' }}>
-            Features
+          <a href="#platform" className="text-xs text-grey-500 hover:text-grey-900 transition-colors duration-300" style={{ letterSpacing: '-0.003em' }}>
+            Platform
           </a>
           <a href="#workflow" className="text-xs text-grey-500 hover:text-grey-900 transition-colors duration-300" style={{ letterSpacing: '-0.003em' }}>
             How It Works
@@ -121,7 +121,7 @@ function HeroSection() {
             }}
           >
             <span className="w-[5px] h-[5px] rounded-full bg-semantic-success animate-pulse" />
-            AI-Powered Prior Authorization
+            Agentic Access Strategy Platform
           </span>
         </motion.div>
 
@@ -136,9 +136,9 @@ function HeroSection() {
             letterSpacing: '-0.04em',
           }}
         >
-          Prior authorization,{' '}
+          Patient access,{' '}
           <br className="hidden sm:block" />
-          reimagined.
+          without the barriers.
         </motion.h1>
 
         <motion.p
@@ -153,7 +153,7 @@ function HeroSection() {
             color: '#86868b',
           }}
         >
-          Autonomous AI agents analyze policies, build strategies, and coordinate approvals — so your team can focus on patient care.
+          AI agents that navigate benefit verification, prior authorization, and payer strategy — so your team can focus on what matters.
         </motion.p>
 
         <motion.div
@@ -179,7 +179,7 @@ function HeroSection() {
             Get Started
           </button>
           <a
-            href="#features"
+            href="#platform"
             className="h-[44px] px-7 rounded-full text-[15px] font-medium text-grey-900 transition-all duration-300 hover:bg-black/[0.04] active:scale-[0.97] inline-flex items-center"
             style={{ letterSpacing: '-0.01em' }}
           >
@@ -204,21 +204,34 @@ function HeroSection() {
   )
 }
 
-function FeaturesSection() {
-  const features = [
+function PlatformSection() {
+  const capabilities = [
     {
-      title: 'Policy Intelligence',
-      description: 'AI agents parse and digitize complex payer policies into structured, actionable criteria in seconds.',
+      title: 'Benefit Verification',
+      description: 'Instantly verify patient eligibility, coverage details, and plan-specific requirements across any payer.',
       icon: (
         <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-          <rect x="3" y="4" width="22" height="20" rx="3" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M8 10H20M8 14H16M8 18H12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <rect x="3" y="6" width="22" height="16" rx="3" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M3 11H25" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M8 16H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <path d="M8 19H11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
       ),
     },
     {
-      title: 'Strategy Generation',
-      description: 'Multiple AI models collaborate to generate optimal authorization strategies ranked by success probability.',
+      title: 'Prior Authorization',
+      description: 'Autonomous agents analyze policies, build clinical arguments, and manage the full PA lifecycle from submission to approval.',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <rect x="3" y="4" width="22" height="20" rx="3" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M8 10H20M8 14H16M8 18H12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <path d="M19 15L21 17L25 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ),
+    },
+    {
+      title: 'Payer Strategy',
+      description: 'AI-generated strategies scored by approval probability, adapting to payer-specific patterns and requirements.',
       icon: (
         <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
           <path d="M14 4L24 10V18L14 24L4 18V10L14 4Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
@@ -227,8 +240,28 @@ function FeaturesSection() {
       ),
     },
     {
+      title: 'Appeals Management',
+      description: 'When claims are denied, AI builds comprehensive appeal packages with clinical evidence and policy citations.',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <path d="M14 4V12L20 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M6 14C6 18.418 9.582 22 14 22C18.418 22 22 18.418 22 14C22 9.582 18.418 6 14 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+    {
+      title: 'Coverage Intelligence',
+      description: 'Real-time insights into coverage landscapes, formulary positioning, and step-therapy requirements across payers.',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <circle cx="14" cy="14" r="10" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M14 8V14L18 18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ),
+    },
+    {
       title: 'Workflow Orchestration',
-      description: 'Autonomous agents coordinate each step of the approval process with human-in-the-loop oversight gates.',
+      description: 'End-to-end coordination across teams with human-in-the-loop gates at every critical decision point.',
       icon: (
         <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
           <circle cx="14" cy="7" r="3" stroke="currentColor" strokeWidth="1.5" />
@@ -241,11 +274,11 @@ function FeaturesSection() {
   ]
 
   return (
-    <section id="features" className="py-28 px-6" style={{ background: '#ffffff' }}>
+    <section id="platform" className="py-28 px-6" style={{ background: '#ffffff' }}>
       <div className="max-w-[980px] mx-auto">
         <FadeInSection className="text-center mb-20">
           <p className="text-sm font-medium text-accent mb-3" style={{ letterSpacing: '-0.003em' }}>
-            Capabilities
+            The Platform
           </p>
           <h2
             className="text-grey-900 font-bold mb-5"
@@ -255,20 +288,20 @@ function FeaturesSection() {
               letterSpacing: '-0.035em',
             }}
           >
-            Intelligence at{' '}
+            Every barrier between patient{' '}
             <br className="hidden sm:block" />
-            every step.
+            and treatment. Addressed.
           </h2>
-          <p className="text-grey-500 max-w-[440px] mx-auto" style={{ fontSize: '1.0625rem', lineHeight: '1.55', letterSpacing: '-0.012em' }}>
-            Three powerful systems work together to transform how prior authorizations are handled.
+          <p className="max-w-[520px] mx-auto" style={{ color: '#86868b', fontSize: '1.0625rem', lineHeight: '1.55', letterSpacing: '-0.012em' }}>
+            A unified platform that orchestrates the entire patient access journey — from eligibility through approval.
           </p>
         </FadeInSection>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {features.map((feature, i) => (
-            <FadeInSection key={feature.title} delay={i * 0.12}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {capabilities.map((cap, i) => (
+            <FadeInSection key={cap.title} delay={i * 0.08}>
               <div
-                className="group p-7 rounded-2xl transition-all duration-500"
+                className="group p-7 rounded-2xl transition-all duration-500 h-full"
                 style={{
                   background: '#f5f5f7',
                   border: '0.5px solid transparent',
@@ -287,16 +320,16 @@ function FeaturesSection() {
                 }}
               >
                 <div className="text-grey-900 mb-4">
-                  {feature.icon}
+                  {cap.icon}
                 </div>
                 <h3
                   className="text-grey-900 font-semibold mb-2"
                   style={{ fontSize: '1.0625rem', letterSpacing: '-0.018em' }}
                 >
-                  {feature.title}
+                  {cap.title}
                 </h3>
                 <p className="text-grey-500 leading-relaxed" style={{ fontSize: '0.875rem', letterSpacing: '-0.006em' }}>
-                  {feature.description}
+                  {cap.description}
                 </p>
               </div>
             </FadeInSection>
@@ -311,23 +344,23 @@ function WorkflowSection() {
   const steps = [
     {
       number: '01',
-      title: 'Case Intake',
-      description: 'Patient data, diagnosis, and treatment details are captured and structured automatically.',
+      title: 'Intake & Verification',
+      description: 'Patient demographics, insurance details, and clinical data are captured. Eligibility and benefits are verified in real time.',
     },
     {
       number: '02',
       title: 'Policy Analysis',
-      description: 'AI agents identify the relevant payer policy and extract each approval criterion.',
+      description: 'AI agents identify relevant payer policies, extract coverage criteria, and map them against the patient\'s clinical profile.',
     },
     {
       number: '03',
-      title: 'Strategy Building',
-      description: 'Multiple strategies are generated, scored, and ranked by probability of approval.',
+      title: 'Strategy & Submission',
+      description: 'Optimal access strategies are generated, scored by approval probability, and submitted with supporting clinical evidence.',
     },
     {
       number: '04',
-      title: 'Action Coordination',
-      description: 'The system orchestrates submissions, tracks responses, and manages appeals if needed.',
+      title: 'Monitor & Resolve',
+      description: 'The system tracks decisions, manages appeals, coordinates peer-to-peer reviews, and escalates when human judgment is needed.',
     },
   ]
 
@@ -346,12 +379,12 @@ function WorkflowSection() {
               letterSpacing: '-0.035em',
             }}
           >
-            From intake to{' '}
+            From verification{' '}
             <br className="hidden sm:block" />
-            approval.
+            to resolution.
           </h2>
-          <p className="text-grey-500 max-w-[440px] mx-auto" style={{ fontSize: '1.0625rem', lineHeight: '1.55', letterSpacing: '-0.012em' }}>
-            A fully orchestrated pipeline that moves each case through every stage with precision.
+          <p className="max-w-[440px] mx-auto" style={{ color: '#86868b', fontSize: '1.0625rem', lineHeight: '1.55', letterSpacing: '-0.012em' }}>
+            An intelligent pipeline that navigates every step of the access journey with precision and transparency.
           </p>
         </FadeInSection>
 
@@ -389,7 +422,7 @@ function WorkflowSection() {
                     >
                       {step.title}
                     </h3>
-                    <p className="text-grey-500" style={{ fontSize: '0.9375rem', lineHeight: '1.6', letterSpacing: '-0.009em', maxWidth: '400px' }}>
+                    <p className="text-grey-500" style={{ fontSize: '0.9375rem', lineHeight: '1.6', letterSpacing: '-0.009em', maxWidth: '440px' }}>
                       {step.description}
                     </p>
                   </div>
@@ -405,9 +438,9 @@ function WorkflowSection() {
 
 function IntelligenceSection() {
   const agents = [
-    { name: 'Claude', role: 'Strategy & Reasoning', color: '#d4a574' },
-    { name: 'Gemini', role: 'Policy Analysis', color: '#7eb8da' },
-    { name: 'Azure OpenAI', role: 'Document Processing', color: '#a8c5a0' },
+    { name: 'Claude', role: 'Strategy & Clinical Reasoning', color: '#d4a574' },
+    { name: 'Gemini', role: 'Policy & Coverage Analysis', color: '#7eb8da' },
+    { name: 'Azure OpenAI', role: 'Document Intelligence', color: '#a8c5a0' },
   ]
 
   return (
@@ -425,12 +458,12 @@ function IntelligenceSection() {
               letterSpacing: '-0.035em',
             }}
           >
-            The best minds,{' '}
+            Three models.{' '}
             <br className="hidden sm:block" />
-            working together.
+            One strategy.
           </h2>
-          <p className="max-w-[440px] mx-auto" style={{ color: 'rgba(255, 255, 255, 0.45)', fontSize: '1.0625rem', lineHeight: '1.55', letterSpacing: '-0.012em' }}>
-            Three frontier AI models collaborate on every case, each contributing their unique strengths.
+          <p className="max-w-[460px] mx-auto" style={{ color: 'rgba(255, 255, 255, 0.45)', fontSize: '1.0625rem', lineHeight: '1.55', letterSpacing: '-0.012em' }}>
+            Frontier AI models work in concert — analyzing policies, reasoning through clinical evidence, and building the strongest possible case for access.
           </p>
         </FadeInSection>
 
@@ -480,10 +513,10 @@ function IntelligenceSection() {
 
 function MetricsSection() {
   const metrics = [
-    { value: '94%', label: 'Approval rate' },
-    { value: '3.2x', label: 'Faster processing' },
-    { value: '78%', label: 'Less manual work' },
-    { value: '<24h', label: 'Average turnaround' },
+    { value: '94%', label: 'First-pass approval rate' },
+    { value: '3.2x', label: 'Faster time to access' },
+    { value: '78%', label: 'Reduction in manual work' },
+    { value: '<24h', label: 'Average case turnaround' },
   ]
 
   return (
@@ -498,9 +531,9 @@ function MetricsSection() {
               letterSpacing: '-0.035em',
             }}
           >
-            Results that{' '}
+            Outcomes that{' '}
             <br className="hidden sm:block" />
-            speak for themselves.
+            move the needle.
           </h2>
         </FadeInSection>
 
@@ -543,12 +576,12 @@ function CTASection() {
               letterSpacing: '-0.035em',
             }}
           >
-            Ready to transform{' '}
+            Every patient deserves{' '}
             <br className="hidden sm:block" />
-            your workflow?
+            access.
           </h2>
-          <p className="text-grey-500 mb-10 mx-auto max-w-[400px]" style={{ fontSize: '1.0625rem', lineHeight: '1.55', letterSpacing: '-0.012em' }}>
-            Start processing prior authorizations with AI-powered intelligence today.
+          <p className="mb-10 mx-auto max-w-[420px]" style={{ color: '#86868b', fontSize: '1.0625rem', lineHeight: '1.55', letterSpacing: '-0.012em' }}>
+            Start navigating benefit verification, prior authorization, and payer strategy with AI-powered intelligence.
           </p>
           <button
             onClick={() => navigate('/dashboard')}
@@ -577,10 +610,10 @@ function Footer() {
     <footer className="py-6 px-6" style={{ background: '#f5f5f7', borderTop: '0.5px solid rgba(0, 0, 0, 0.06)' }}>
       <div className="max-w-[980px] mx-auto flex items-center justify-between">
         <p className="text-grey-400" style={{ fontSize: '0.75rem', letterSpacing: '-0.003em' }}>
-          Agentic Access Strategy Platform
+          Access Strategy Platform
         </p>
         <p className="text-grey-300" style={{ fontSize: '0.6875rem' }}>
-          AI-Powered Prior Authorization
+          Intelligent Patient Access
         </p>
       </div>
     </footer>
@@ -592,7 +625,7 @@ export default function Landing() {
     <div className="min-h-screen" style={{ background: '#fbfbfd' }}>
       <NavBar />
       <HeroSection />
-      <FeaturesSection />
+      <PlatformSection />
       <WorkflowSection />
       <IntelligenceSection />
       <MetricsSection />

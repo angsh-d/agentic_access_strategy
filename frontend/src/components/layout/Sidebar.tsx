@@ -44,7 +44,7 @@ export function Sidebar() {
               />
             </svg>
           </div>
-          <span className="font-semibold text-[15px] text-grey-900 tracking-tight">
+          <span className="font-semibold text-[14px] text-grey-900 tracking-tight">
             Access Strategy
           </span>
         </div>

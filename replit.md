@@ -1,7 +1,7 @@
-# Agentic Access Strategy Platform
+# Access Strategy Platform
 
 ## Overview
-An autonomous prior authorization workflow orchestration platform. Uses AI agents (Claude, Gemini, Azure OpenAI) to analyze medical policies, generate strategies, and coordinate actions for prior authorization cases.
+An autonomous patient access workflow orchestration platform. Uses AI agents (Claude, Gemini, Azure OpenAI) to navigate benefit verification, prior authorization, payer strategy, and appeals management — the full spectrum of patient access challenges.
 
 ## Architecture
 - **Backend**: Python FastAPI application (port 8000 in dev)
@@ -46,7 +46,7 @@ Single workflow runs both backend and frontend:
 - Frontend: `npm run dev` (Vite on port 5000)
 
 ## Routing
-- `/` - Landing page (Apple-inspired hero, features, workflow, intelligence sections)
+- `/` - Landing page (Apple-inspired hero with broader access strategy narrative, platform capabilities, workflow, intelligence sections)
 - `/dashboard` - Main application dashboard
 - `/cases` - Case queue (same as dashboard)
 - `/cases/new` - New case creation
