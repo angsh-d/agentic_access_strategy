@@ -1,11 +1,14 @@
 """FastAPI application entry point."""
 from contextlib import asynccontextmanager
 from datetime import datetime
+import os
+from pathlib import Path
 import uuid
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.config.settings import get_settings
 from backend.config.logging_config import setup_logging, get_logger
@@ -165,6 +168,18 @@ async def set_scenario(scenario_id: str):
             status_code=400,
             content={"error": f"Invalid scenario: {scenario_id}"}
         )
+
+
+FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
+if FRONTEND_DIST.exists():
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="static-assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        file_path = FRONTEND_DIST / full_path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(str(file_path))
+        return FileResponse(str(FRONTEND_DIST / "index.html"))
 
 
 if __name__ == "__main__":

@@ -19,13 +19,28 @@ def get_engine():
     global _engine
     if _engine is None:
         settings = get_settings()
+        db_url = settings.database_url
+        if db_url.startswith("postgresql://"):
+            db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        elif db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+        if "sslmode=" in db_url:
+            from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+            parsed = urlparse(db_url)
+            params = parse_qs(parsed.query)
+            ssl_mode = params.pop("sslmode", ["disable"])[0]
+            new_query = urlencode(params, doseq=True)
+            db_url = urlunparse(parsed._replace(query=new_query))
+            connect_args = {"ssl": None} if ssl_mode == "disable" else {}
+        else:
+            connect_args = {}
         _engine = create_async_engine(
-            settings.database_url,
+            db_url,
             echo=settings.app_env == "development",
-            future=True
+            future=True,
+            connect_args=connect_args,
         )
-        # Log database type only — do not log full URL which may contain credentials
-        db_type = settings.database_url.split("://")[0] if "://" in settings.database_url else "unknown"
+        db_type = db_url.split("://")[0] if "://" in db_url else "unknown"
         logger.info("Database engine created", db_type=db_type)
     return _engine
 

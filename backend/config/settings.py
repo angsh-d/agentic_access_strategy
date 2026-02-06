@@ -16,14 +16,14 @@ class Settings(BaseSettings):
     )
 
     # Claude API (Policy Reasoning - NO FALLBACK)
-    anthropic_api_key: str = Field(..., description="Anthropic API key for Claude")
+    anthropic_api_key: str = Field(default="", description="Anthropic API key for Claude")
 
     # Gemini API (Primary for general tasks)
-    gemini_api_key: str = Field(..., description="Google Gemini API key")
+    gemini_api_key: str = Field(default="", description="Google Gemini API key")
 
     # Azure OpenAI (Fallback for general tasks)
-    azure_openai_api_key: str = Field(..., description="Azure OpenAI API key")
-    azure_openai_endpoint: str = Field(..., description="Azure OpenAI endpoint URL")
+    azure_openai_api_key: str = Field(default="", description="Azure OpenAI API key")
+    azure_openai_endpoint: str = Field(default="", description="Azure OpenAI endpoint URL")
     azure_openai_deployment: str = Field(default="gpt-4o", description="Azure OpenAI deployment name")
     azure_openai_api_version: str = Field(default="2024-02-15-preview", description="Azure OpenAI API version")
 
@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     app_env: str = Field(default="development", description="Application environment")
     log_level: str = Field(default="INFO", description="Logging level")
     cors_origins: List[str] = Field(
-        default=["http://localhost:3000", "http://localhost:8000"],
+        default=["*"],
         description="Allowed CORS origins"
     )
 
