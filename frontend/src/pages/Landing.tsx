@@ -511,12 +511,20 @@ function IntelligenceSection() {
   )
 }
 
-function MetricsSection() {
-  const metrics = [
-    { value: '94%', label: 'First-pass approval rate' },
-    { value: '3.2x', label: 'Faster time to access' },
-    { value: '78%', label: 'Reduction in manual work' },
-    { value: '<24h', label: 'Average case turnaround' },
+function DesignedForSection() {
+  const principles = [
+    {
+      title: 'Built for complexity',
+      description: 'Healthcare access is tangled in payer-specific rules, clinical criteria, and regulatory nuance. This platform was designed to navigate that complexity autonomously.',
+    },
+    {
+      title: 'Human oversight at every gate',
+      description: 'AI handles the analysis and coordination. Your team retains full decision authority at every critical step — approve, override, or redirect.',
+    },
+    {
+      title: 'Transparent reasoning',
+      description: 'Every recommendation comes with the evidence and logic behind it. No black boxes. Full audit trails for every case.',
+    },
   ]
 
   return (
@@ -531,27 +539,23 @@ function MetricsSection() {
               letterSpacing: '-0.035em',
             }}
           >
-            Outcomes that{' '}
+            Designed for the{' '}
             <br className="hidden sm:block" />
-            move the needle.
+            way access actually works.
           </h2>
         </FadeInSection>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          {metrics.map((metric, i) => (
-            <FadeInSection key={metric.label} delay={i * 0.1} className="text-center">
-              <div
-                className="font-bold text-grey-900 mb-1.5"
-                style={{
-                  fontSize: 'clamp(2.25rem, 5vw, 3.5rem)',
-                  letterSpacing: '-0.04em',
-                  fontVariantNumeric: 'tabular-nums',
-                }}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {principles.map((principle, i) => (
+            <FadeInSection key={principle.title} delay={i * 0.1} className="text-center md:text-left">
+              <h3
+                className="text-grey-900 font-semibold mb-2"
+                style={{ fontSize: '1.0625rem', letterSpacing: '-0.018em' }}
               >
-                {metric.value}
-              </div>
-              <p className="text-grey-400" style={{ fontSize: '0.8125rem', letterSpacing: '-0.003em' }}>
-                {metric.label}
+                {principle.title}
+              </h3>
+              <p className="leading-relaxed" style={{ color: '#86868b', fontSize: '0.9375rem', letterSpacing: '-0.009em', lineHeight: '1.6' }}>
+                {principle.description}
               </p>
             </FadeInSection>
           ))}
@@ -628,7 +632,7 @@ export default function Landing() {
       <PlatformSection />
       <WorkflowSection />
       <IntelligenceSection />
-      <MetricsSection />
+      <DesignedForSection />
       <CTASection />
       <Footer />
     </div>
