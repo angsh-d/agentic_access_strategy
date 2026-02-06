@@ -53,6 +53,22 @@ interface DocumentationInsight {
   cases_without: number
 }
 
+interface EvidenceBreakdown {
+  total: number
+  approved: number
+  denied: number
+  info_requested: number
+  sample_case_ids: string[]
+}
+
+interface CompensatingFactorEvidence {
+  total_cases_analyzed: number
+  cases_missing_this_doc?: number
+  with_compensation: EvidenceBreakdown
+  without_compensation: EvidenceBreakdown
+  methodology: string
+}
+
 interface CompensatingFactor {
   pattern_type: string
   missing_documentation?: string
@@ -70,6 +86,7 @@ interface CompensatingFactor {
   recommendation: string
   priority: 'high' | 'medium' | 'low'
   bundle_criteria?: Record<string, string>
+  evidence?: CompensatingFactorEvidence
 }
 
 interface AgenticInsight {
@@ -108,6 +125,17 @@ interface StrategicIntelligenceData {
   confidence_score: number
   compensating_factors?: CompensatingFactor[]
   agentic_insights?: AgenticInsight[]
+  evidence_summary?: {
+    total_similar_cases: number
+    outcome_breakdown: {
+      approved: number
+      denied: number
+      info_requested: number
+    }
+    sample_approved_case_ids: string[]
+    sample_denied_case_ids: string[]
+    methodology: string
+  }
 }
 
 async function fetchStrategicIntelligence(caseId: string): Promise<StrategicIntelligenceData> {
@@ -142,6 +170,7 @@ async function fetchStrategicIntelligence(caseId: string): Promise<StrategicInte
     confidence_score: data.confidence_score,
     compensating_factors: data.compensating_factors || [],
     agentic_insights: data.agentic_insights || [],
+    evidence_summary: data.evidence_summary || undefined,
   }
 }
 
@@ -488,19 +517,21 @@ export function StrategicIntelligence({ caseId, caseData: providedCaseData, clas
                 <div className="px-6 pb-5 space-y-3">
                   <ReasoningItem
                     step={1}
-                    text={`Identified ${totalCases} historical cases matching ${medicationName || 'medication'} + ${payerName || 'payer'}`}
+                    text={`Searched 350 historical PA cases, matched ${totalCases} by medication (${medicationName || 'unknown'}), diagnosis family, payer (${payerName || 'unknown'}), disease severity, and prior treatments`}
                   />
                   <ReasoningItem
                     step={2}
-                    text={`Analyzed outcomes: ${Math.round(effectiveData.similar_cases.approval_rate * totalCases)} approved, ${Math.round(effectiveData.similar_cases.info_request_rate * totalCases)} needed info, ${Math.round(effectiveData.similar_cases.denial_rate * totalCases)} denied`}
+                    text={effectiveData.evidence_summary?.methodology ||
+                      `Analyzed outcomes: ${Math.round(effectiveData.similar_cases.approval_rate * totalCases)} approved, ${Math.round(effectiveData.similar_cases.info_request_rate * totalCases)} needed info, ${Math.round(effectiveData.similar_cases.denial_rate * totalCases)} denied`
+                    }
                   />
                   <ReasoningItem
                     step={3}
-                    text={`Compared ${patientFirstName}'s documentation against success patterns`}
+                    text={`Compared ${patientFirstName}'s documentation against success patterns from approved cases${effectiveData.evidence_summary?.sample_approved_case_ids?.length ? ` (e.g. ${effectiveData.evidence_summary.sample_approved_case_ids.slice(0, 2).join(', ')})` : ''}`}
                   />
                   <ReasoningItem
                     step={4}
-                    text={`Generated prioritized recommendations based on impact analysis`}
+                    text={`Identified compensating factor patterns — non-obvious correlations where one factor offsets a missing requirement, backed by case-level outcome data`}
                     isLast
                   />
                 </div>
@@ -1064,6 +1095,94 @@ function AgenticPatternCard({ factor }: { factor: CompensatingFactor }) {
           <p className="text-xs text-grey-500 mt-1.5 pl-2 border-l-2 border-grey-200">
             {factor.clinical_rationale}
           </p>
+        </details>
+      )}
+
+      {/* Evidence Provenance */}
+      {factor.evidence && (
+        <details className="mt-2">
+          <summary className="text-xs text-grey-400 cursor-pointer hover:text-grey-600 flex items-center gap-1">
+            <BarChart3 className="w-3 h-3" />
+            Evidence from {factor.evidence.total_cases_analyzed} historical cases
+          </summary>
+          <div className="mt-2 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-2 bg-grey-50 rounded-lg border border-grey-100">
+                <p className="text-xs font-medium text-grey-500 mb-1">With Compensation</p>
+                <div className="space-y-0.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-grey-500">Approved</span>
+                    <span className="font-semibold text-grey-900">{factor.evidence.with_compensation.approved}/{factor.evidence.with_compensation.total}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-grey-500">Denied</span>
+                    <span className="font-medium text-grey-600">{factor.evidence.with_compensation.denied}/{factor.evidence.with_compensation.total}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-grey-500">Info Req</span>
+                    <span className="font-medium text-grey-600">{factor.evidence.with_compensation.info_requested}/{factor.evidence.with_compensation.total}</span>
+                  </div>
+                </div>
+                <div className="mt-1.5 w-full h-1.5 bg-grey-200 rounded-full overflow-hidden flex">
+                  <div
+                    className="h-full bg-grey-900 rounded-l-full"
+                    style={{ width: `${(factor.evidence.with_compensation.approved / factor.evidence.with_compensation.total) * 100}%` }}
+                  />
+                  <div
+                    className="h-full bg-grey-400"
+                    style={{ width: `${(factor.evidence.with_compensation.info_requested / factor.evidence.with_compensation.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+              <div className="p-2 bg-grey-50 rounded-lg border border-grey-100">
+                <p className="text-xs font-medium text-grey-500 mb-1">Without Compensation</p>
+                <div className="space-y-0.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-grey-500">Approved</span>
+                    <span className="font-semibold text-grey-900">{factor.evidence.without_compensation.approved}/{factor.evidence.without_compensation.total}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-grey-500">Denied</span>
+                    <span className="font-medium text-grey-600">{factor.evidence.without_compensation.denied}/{factor.evidence.without_compensation.total}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-grey-500">Info Req</span>
+                    <span className="font-medium text-grey-600">{factor.evidence.without_compensation.info_requested}/{factor.evidence.without_compensation.total}</span>
+                  </div>
+                </div>
+                <div className="mt-1.5 w-full h-1.5 bg-grey-200 rounded-full overflow-hidden flex">
+                  <div
+                    className="h-full bg-grey-900 rounded-l-full"
+                    style={{ width: `${(factor.evidence.without_compensation.approved / factor.evidence.without_compensation.total) * 100}%` }}
+                  />
+                  <div
+                    className="h-full bg-grey-400"
+                    style={{ width: `${(factor.evidence.without_compensation.info_requested / factor.evidence.without_compensation.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-grey-400 italic leading-relaxed px-1">
+              {factor.evidence.methodology}
+            </p>
+            {factor.evidence.with_compensation.sample_case_ids.length > 0 && (
+              <div className="px-1">
+                <p className="text-xs text-grey-400 mb-1">Reference cases:</p>
+                <div className="flex flex-wrap gap-1">
+                  {factor.evidence.with_compensation.sample_case_ids.slice(0, 3).map((id, idx) => (
+                    <span key={idx} className="px-1.5 py-0.5 bg-grey-100 text-grey-500 text-xs font-mono rounded">
+                      {id}
+                    </span>
+                  ))}
+                  {factor.evidence.with_compensation.sample_case_ids.length > 3 && (
+                    <span className="text-xs text-grey-400">
+                      +{factor.evidence.with_compensation.sample_case_ids.length - 3} more
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </details>
       )}
     </div>

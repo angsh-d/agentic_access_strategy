@@ -67,7 +67,8 @@ class StrategicInsights:
         confidence_score: float,
         confidence_reasoning: str,
         compensating_factors: Optional[List[Dict[str, Any]]] = None,
-        agentic_insights: Optional[List[Dict[str, Any]]] = None
+        agentic_insights: Optional[List[Dict[str, Any]]] = None,
+        evidence_summary: Optional[Dict[str, Any]] = None
     ):
         self.similar_cases_count = similar_cases_count
         self.approval_rate_for_similar = approval_rate_for_similar
@@ -85,6 +86,7 @@ class StrategicInsights:
         self.confidence_reasoning = confidence_reasoning
         self.compensating_factors = compensating_factors or []
         self.agentic_insights = agentic_insights or []
+        self.evidence_summary = evidence_summary or {}
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API response matching frontend interface."""
@@ -106,7 +108,8 @@ class StrategicInsights:
             "confidence_score": self.confidence_score,
             "confidence_reasoning": self.confidence_reasoning,
             "compensating_factors": self.compensating_factors,
-            "agentic_insights": self.agentic_insights
+            "agentic_insights": self.agentic_insights,
+            "evidence_summary": self.evidence_summary
         }
 
 
@@ -604,6 +607,9 @@ class StrategicIntelligenceAgent:
         info_requests = sum(1 for c in similar_cases if c.case_data.get("outcome") == "info_request")
         denied = sum(1 for c in similar_cases if c.case_data.get("outcome") == "denied")
 
+        sample_approved_ids = [c.case_id for c in similar_cases if c.case_data.get("outcome") == "approved"][:5]
+        sample_denied_ids = [c.case_id for c in similar_cases if c.case_data.get("outcome") == "denied"][:5]
+
         # Analyze documentation patterns
         doc_patterns = self._analyze_documentation_patterns(
             similar_cases, current_docs_lower
@@ -646,7 +652,25 @@ class StrategicIntelligenceAgent:
             "documentation_patterns": doc_patterns,
             "timing_patterns": timing_patterns,
             "denial_reasons": denial_reasons,
-            "compensating_factors": compensating_factors
+            "compensating_factors": compensating_factors,
+            "evidence_summary": {
+                "total_similar_cases": total,
+                "outcome_breakdown": {
+                    "approved": approved,
+                    "denied": denied,
+                    "info_requested": info_requests,
+                },
+                "sample_approved_case_ids": sample_approved_ids,
+                "sample_denied_case_ids": sample_denied_ids,
+                "methodology": (
+                    f"Matched {total} historical cases by medication, diagnosis family, payer, "
+                    f"disease severity, and prior treatment history. "
+                    f"Outcomes: {approved} approved ({approved/total:.0%}), "
+                    f"{denied} denied ({denied/total:.0%}), "
+                    f"{info_requests} info requested ({info_requests/total:.0%}). "
+                    f"Average {avg_days:.1f} days to decision."
+                ),
+            },
         }
 
     def _analyze_documentation_patterns(
@@ -693,7 +717,9 @@ class StrategicIntelligenceAgent:
                         "approval_rate_without": missing_rate,
                         "impact_delta": impact,
                         "is_present_in_current_case": is_present,
-                        "recommendation": "already included" if is_present else "recommend adding"
+                        "recommendation": "already included" if is_present else "recommend adding",
+                        "cases_with": stats["present_total"],
+                        "cases_without": stats["missing_total"],
                     })
 
         # Sort by impact
@@ -930,6 +956,43 @@ class StrategicIntelligenceAgent:
                         recommendation = f"{missing_doc.replace('_', ' ')} is present - no compensation needed."
                         priority = "low"
 
+                    approved_with = sum(1 for c in cases_with_compensation if c["case"].get("outcome") == "approved")
+                    denied_with = sum(1 for c in cases_with_compensation if c["case"].get("outcome") == "denied")
+                    info_req_with = len(cases_with_compensation) - approved_with - denied_with
+                    approved_without = sum(1 for c in cases_without_compensation if c.get("outcome") == "approved")
+                    denied_without = sum(1 for c in cases_without_compensation if c.get("outcome") == "denied")
+                    info_req_without = len(cases_without_compensation) - approved_without - denied_without
+
+                    sample_case_ids_with = [c["case"].get("case_id", "unknown") for c in cases_with_compensation[:5]]
+                    sample_case_ids_without = [c.get("case_id", "unknown") for c in cases_without_compensation[:5]]
+
+                    evidence = {
+                        "total_cases_analyzed": len(all_relevant_cases),
+                        "cases_missing_this_doc": len(cases_missing_doc),
+                        "with_compensation": {
+                            "total": len(cases_with_compensation),
+                            "approved": approved_with,
+                            "denied": denied_with,
+                            "info_requested": info_req_with,
+                            "sample_case_ids": sample_case_ids_with,
+                        },
+                        "without_compensation": {
+                            "total": len(cases_without_compensation),
+                            "approved": approved_without,
+                            "denied": denied_without,
+                            "info_requested": info_req_without,
+                            "sample_case_ids": sample_case_ids_without,
+                        },
+                        "methodology": (
+                            f"Analyzed {len(all_relevant_cases)} historical cases for {medication_name or 'this medication'}. "
+                            f"Found {len(cases_missing_doc)} cases missing {missing_doc.replace('_', ' ')}. "
+                            f"Of those, {len(cases_with_compensation)} had compensating factors and "
+                            f"{len(cases_without_compensation)} did not. "
+                            f"Approval rate with compensation: {approved_with}/{len(cases_with_compensation)} ({approval_with:.0%}). "
+                            f"Approval rate without: {approved_without}/{len(cases_without_compensation)} ({approval_without:.0%})."
+                        ),
+                    }
+
                     compensating_patterns.append({
                         "pattern_type": "compensating_factor",
                         "missing_documentation": missing_doc,
@@ -945,7 +1008,8 @@ class StrategicIntelligenceAgent:
                         "current_case_has_compensation": current_has_compensation,
                         "current_compensating_factors": current_compensating_factors,
                         "recommendation": recommendation,
-                        "priority": priority
+                        "priority": priority,
+                        "evidence": evidence,
                     })
 
         # Also detect lab severity bundle pattern
@@ -998,6 +1062,38 @@ class StrategicIntelligenceAgent:
                     )
                     priority = "medium"
 
+                bundle_approved = sum(1 for c in lab_bundle_cases if c.case_data.get("outcome") == "approved")
+                bundle_denied = sum(1 for c in lab_bundle_cases if c.case_data.get("outcome") == "denied")
+                bundle_info = len(lab_bundle_cases) - bundle_approved - bundle_denied
+                non_bundle_approved = sum(1 for c in non_bundle_cases if c.case_data.get("outcome") == "approved")
+                non_bundle_denied = sum(1 for c in non_bundle_cases if c.case_data.get("outcome") == "denied")
+                non_bundle_info = len(non_bundle_cases) - non_bundle_approved - non_bundle_denied
+
+                bundle_evidence = {
+                    "total_cases_analyzed": len(similar_cases),
+                    "with_compensation": {
+                        "total": len(lab_bundle_cases),
+                        "approved": bundle_approved,
+                        "denied": bundle_denied,
+                        "info_requested": bundle_info,
+                        "sample_case_ids": [c.case_id for c in lab_bundle_cases[:5]],
+                    },
+                    "without_compensation": {
+                        "total": len(non_bundle_cases),
+                        "approved": non_bundle_approved,
+                        "denied": non_bundle_denied,
+                        "info_requested": non_bundle_info,
+                        "sample_case_ids": [c.case_id for c in non_bundle_cases[:5]],
+                    },
+                    "methodology": (
+                        f"Analyzed {len(similar_cases)} similar cases. "
+                        f"{len(lab_bundle_cases)} had lab severity bundle (CRP>20, albumin<3.0, ESR>40): "
+                        f"{bundle_approved} approved, {bundle_denied} denied, {bundle_info} info requested. "
+                        f"{len(non_bundle_cases)} without bundle: "
+                        f"{non_bundle_approved} approved, {non_bundle_denied} denied, {non_bundle_info} info requested."
+                    ),
+                }
+
                 compensating_patterns.append({
                     "pattern_type": "lab_severity_bundle",
                     "description": "Elevated inflammatory markers create approval-favorable severity signal",
@@ -1010,7 +1106,8 @@ class StrategicIntelligenceAgent:
                     "cases_without_bundle": len(non_bundle_cases),
                     "current_case_has_bundle": current_has_bundle,
                     "recommendation": recommendation,
-                    "priority": priority
+                    "priority": priority,
+                    "evidence": bundle_evidence,
                 })
 
         # Sort by approval uplift (most impactful first)
@@ -1141,7 +1238,8 @@ class StrategicIntelligenceAgent:
             confidence_score=data.get("confidence_score", 0.5),
             confidence_reasoning=data.get("confidence_reasoning", "Restored from cache"),
             compensating_factors=data.get("compensating_factors", []),
-            agentic_insights=data.get("agentic_insights", [])
+            agentic_insights=data.get("agentic_insights", []),
+            evidence_summary=data.get("evidence_summary", {})
         )
 
     def _extract_medication_name(
@@ -1506,7 +1604,8 @@ class StrategicIntelligenceAgent:
             confidence_score=confidence,
             confidence_reasoning=confidence_reasoning,
             compensating_factors=compensating_factors,
-            agentic_insights=llm_insights.get("agentic_insights", [])
+            agentic_insights=llm_insights.get("agentic_insights", []),
+            evidence_summary=pattern_analysis.get("evidence_summary", {})
         )
 
 
