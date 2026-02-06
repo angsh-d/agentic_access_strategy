@@ -276,7 +276,7 @@ export function Dashboard() {
                 letterSpacing: '-0.035em',
                 lineHeight: 1.1,
               }}>
-                Ready when you are.
+                Start with a single case.
               </h2>
               <p style={{
                 fontSize: 'clamp(0.9375rem, 2vw, 1.125rem)',
