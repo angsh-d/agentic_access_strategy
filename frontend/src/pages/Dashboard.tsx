@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect } from 'react'
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -12,20 +12,13 @@ import {
   Clock,
   CheckCircle2,
   Sparkles,
-  Loader2,
+  Activity,
+  BookOpen,
 } from 'lucide-react'
-import { GlassPanel } from '@/components/ui/GlassPanel'
-import { Button, SkeletonList } from '@/components/ui'
 import {
   CaseQueueCard,
   type CaseQueueItem,
 } from '@/components/domain/CaseQueueCard'
-import {
-  WorkspaceStats,
-  AIInsightCard,
-  RecentActivity,
-  type StatItem,
-} from '@/components/domain/WorkspaceStats'
 import { useCases } from '@/hooks/useCases'
 import { ENDPOINTS, QUERY_KEYS, CACHE_TIMES } from '@/lib/constants'
 import { getInitials } from '@/lib/utils'
@@ -135,36 +128,12 @@ async function fetchAIActivity() {
   }))
 }
 
+const ease = [0.16, 1, 0.3, 1]
+
 export function Dashboard() {
   const navigate = useNavigate()
   const { data, isLoading, error } = useCases({ limit: 50 })
-  const [isNavigating, setIsNavigating] = useState(false)
-  const [navigatingTo, setNavigatingTo] = useState<string | null>(null)
-  const mountedRef = useRef(true)
-  const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-      if (navTimerRef.current) {
-        clearTimeout(navTimerRef.current)
-        navTimerRef.current = null
-      }
-    }
-  }, [])
-
-  const delayedNavigate = async (to: string, label?: string) => {
-    if (!mountedRef.current) return
-    setIsNavigating(true)
-    setNavigatingTo(label || to)
-    const delay = Math.floor(Math.random() * 3000) + 5000
-    await new Promise<void>(resolve => {
-      navTimerRef.current = setTimeout(resolve, delay)
-    })
-    if (!mountedRef.current) return
-    setIsNavigating(false)
-    setNavigatingTo(null)
+  const handleNavigate = (to: string) => {
     navigate(to)
   }
 
@@ -185,7 +154,7 @@ export function Dashboard() {
     [rawCases]
   )
 
-  const stats: StatItem[] = useMemo(() => {
+  const stats = useMemo(() => {
     const todayStart = new Date()
     todayStart.setHours(0, 0, 0, 0)
 
@@ -209,27 +178,7 @@ export function Dashboard() {
 
     const successRate = rawCases.length > 0 ? (approvedCases / rawCases.length) * 100 : 0
 
-    return [
-      {
-        label: 'Approved Today',
-        value: completedToday,
-        icon: 'approved' as const,
-        trend: completedToday > 3 ? 'up' as const : 'neutral' as const,
-      },
-      {
-        label: 'Avg Processing',
-        value: `${avgProcessingDays.toFixed(1)}d`,
-        icon: 'time' as const,
-        trend: avgProcessingDays < 5 ? 'down' as const : 'neutral' as const,
-      },
-      {
-        label: 'Success Rate',
-        value: `${successRate.toFixed(0)}%`,
-        icon: 'rate' as const,
-        trend: successRate > 70 ? 'up' as const : 'neutral' as const,
-        trendValue: successRate > 70 ? '+3%' : undefined,
-      },
-    ]
+    return { completedToday, avgProcessingDays, successRate }
   }, [rawCases])
 
   const aiInsight = useMemo(() => {
@@ -243,11 +192,11 @@ export function Dashboard() {
   }, [needsAttention, completed])
 
   const handleProcessCase = (caseId: string) => {
-    delayedNavigate(`/cases/${caseId}`, 'Loading case...')
+    handleNavigate(`/cases/${caseId}`)
   }
 
   const handleCreateCase = () => {
-    delayedNavigate('/cases/new', 'Creating new case...')
+    handleNavigate('/cases/new')
   }
 
   const getGreeting = () => {
@@ -257,106 +206,107 @@ export function Dashboard() {
     return 'Good evening'
   }
 
-  return (
-    <div className="min-h-screen">
-      {isNavigating && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-white/80 backdrop-blur-md z-50 flex items-center justify-center"
-        >
-          <motion.div
-            className="text-center"
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.1, duration: 0.3, ease: [0.34, 1.56, 0.64, 1] }}
-          >
-            <div className="w-14 h-14 rounded-2xl bg-grey-900 flex items-center justify-center mx-auto mb-4 shadow-lg">
-              <Loader2 className="w-6 h-6 text-white animate-spin" />
-            </div>
-            <p className="text-[15px] text-grey-800 font-semibold">{navigatingTo || 'Loading...'}</p>
-            <p className="text-[13px] text-grey-400 mt-1">Please wait</p>
-          </motion.div>
-        </motion.div>
-      )}
+  const statusColors: Record<string, string> = {
+    success: 'bg-semantic-success',
+    pending: 'bg-semantic-warning',
+    info: 'bg-grey-300',
+  }
 
-      <div className="glass-header sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-3.5">
+  return (
+    <div className="min-h-screen" style={{ background: '#fafafa' }}>
+      <header
+        className="sticky top-0 z-10"
+        style={{
+          background: 'rgba(250, 250, 250, 0.8)',
+          backdropFilter: 'saturate(180%) blur(20px)',
+          WebkitBackdropFilter: 'saturate(180%) blur(20px)',
+          borderBottom: '0.5px solid rgba(0, 0, 0, 0.06)',
+        }}
+      >
+        <div className="max-w-[1200px] mx-auto px-8 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-[20px] font-semibold text-grey-900 tracking-tight">
+              <h1
+                style={{
+                  fontSize: 'clamp(1.25rem, 2vw, 1.5rem)',
+                  fontWeight: 600,
+                  color: '#1d1d1f',
+                  letterSpacing: '-0.025em',
+                  lineHeight: 1.2,
+                }}
+              >
                 {getGreeting()}
               </h1>
-              <p className="text-[13px] text-grey-400 font-medium mt-0.5">PA Specialist Workspace</p>
+              <p style={{ fontSize: '0.8125rem', color: '#86868b', marginTop: '2px', letterSpacing: '-0.006em' }}>
+                Access Strategy Workspace
+              </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="primary"
-                size="md"
-                onClick={handleCreateCase}
-                leftIcon={<Plus className="w-3.5 h-3.5" strokeWidth={2.5} />}
-              >
-                New Case
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
+            <div className="flex items-center gap-3">
+              <button
                 onClick={() => navigate('/settings')}
+                className="transition-colors duration-200"
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'rgba(0, 0, 0, 0.03)',
+                  border: '0.5px solid rgba(0, 0, 0, 0.06)',
+                }}
               >
-                <Settings className="w-[18px] h-[18px] text-grey-400" />
-              </Button>
+                <Settings className="w-[16px] h-[16px]" style={{ color: '#86868b' }} />
+              </button>
+              <button
+                onClick={handleCreateCase}
+                className="transition-all duration-200 hover:shadow-md active:scale-[0.97]"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 16px',
+                  background: '#1d1d1f',
+                  color: '#ffffff',
+                  borderRadius: '10px',
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  letterSpacing: '-0.006em',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+                New Case
+              </button>
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-5">
+      <div className="max-w-[1200px] mx-auto px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-8 space-y-6">
             {isLoading ? (
-              <GlassPanel variant="default" padding="lg">
-                <SkeletonList count={3} />
-              </GlassPanel>
+              <LoadingSkeleton />
             ) : error ? (
-              <GlassPanel variant="default" padding="lg" className="text-center">
-                <p className="text-[13px] text-grey-400">Failed to load cases</p>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="mt-4"
-                  onClick={() => window.location.reload()}
-                >
-                  Retry
-                </Button>
-              </GlassPanel>
+              <ErrorState />
             ) : rawCases.length === 0 ? (
               <EmptyState onCreateCase={handleCreateCase} />
             ) : (
               <>
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                >
-                  <div className="surface-card p-5">
-                    <div className="flex items-center gap-2 mb-4">
-                      <AlertTriangle className="w-[18px] h-[18px] text-semantic-error" strokeWidth={2} />
-                      <h2 className="text-[15px] font-semibold text-grey-900">
-                        Needs Attention
-                      </h2>
-                      <span className="ml-auto text-[12px] font-semibold text-grey-400 tabular-nums">
-                        {needsAttention.length}
-                      </span>
-                    </div>
-
-                    {needsAttention.length === 0 ? (
-                      <div className="py-8 text-center">
-                        <CheckCircle2 className="w-7 h-7 text-semantic-success mx-auto mb-2" />
-                        <p className="text-[13px] text-grey-400">All caught up! No cases need immediate attention.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-1.5">
+                {needsAttention.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, ease }}
+                  >
+                    <SectionCard
+                      icon={<AlertTriangle className="w-4 h-4" style={{ color: '#ff3b30' }} strokeWidth={2} />}
+                      title="Needs Attention"
+                      count={needsAttention.length}
+                    >
+                      <div className="space-y-1">
                         {needsAttention.slice(0, 5).map((item) => (
                           <CaseQueueCard
                             key={item.caseId}
@@ -369,38 +319,54 @@ export function Dashboard() {
                           <button
                             type="button"
                             onClick={() => navigate('/cases')}
-                            className="w-full py-2 text-[12px] font-medium text-grey-400 hover:text-grey-600 transition-colors"
+                            className="w-full py-2.5 transition-colors duration-200"
+                            style={{ fontSize: '0.75rem', fontWeight: 500, color: '#86868b', letterSpacing: '-0.003em' }}
                           >
                             + {needsAttention.length - 5} more cases needing attention
                           </button>
                         )}
                       </div>
-                    )}
-                  </div>
-                </motion.div>
+                    </SectionCard>
+                  </motion.div>
+                )}
+
+                {needsAttention.length === 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, ease }}
+                  >
+                    <SectionCard
+                      icon={<CheckCircle2 className="w-4 h-4" style={{ color: '#34c759' }} strokeWidth={2} />}
+                      title="All Clear"
+                    >
+                      <div className="py-6 text-center">
+                        <p style={{ fontSize: '0.8125rem', color: '#86868b' }}>
+                          No cases need immediate attention. You're all caught up.
+                        </p>
+                      </div>
+                    </SectionCard>
+                  </motion.div>
+                )}
 
                 <motion.div
-                  initial={{ opacity: 0, y: 8 }}
+                  initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.35, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
+                  transition={{ duration: 0.5, delay: 0.1, ease }}
                 >
-                  <div className="surface-card p-5">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Clock className="w-[18px] h-[18px] text-semantic-warning" strokeWidth={2} />
-                      <h2 className="text-[15px] font-semibold text-grey-900">
-                        In Progress
-                      </h2>
-                      <span className="ml-auto text-[12px] font-semibold text-grey-400 tabular-nums">
-                        {inProgress.length}
-                      </span>
-                    </div>
-
+                  <SectionCard
+                    icon={<Clock className="w-4 h-4" style={{ color: '#ff9500' }} strokeWidth={2} />}
+                    title="In Progress"
+                    count={inProgress.length}
+                  >
                     {inProgress.length === 0 ? (
-                      <div className="py-8 text-center">
-                        <p className="text-[13px] text-grey-400">No cases currently in progress.</p>
+                      <div className="py-6 text-center">
+                        <p style={{ fontSize: '0.8125rem', color: '#86868b' }}>
+                          No cases currently in progress.
+                        </p>
                       </div>
                     ) : (
-                      <div className="space-y-1.5">
+                      <div className="space-y-1">
                         {inProgress.slice(0, 5).map((item) => (
                           <CaseQueueCard
                             key={item.caseId}
@@ -413,40 +379,48 @@ export function Dashboard() {
                           <button
                             type="button"
                             onClick={() => navigate('/cases')}
-                            className="w-full py-2 text-[12px] font-medium text-grey-400 hover:text-grey-600 transition-colors"
+                            className="w-full py-2.5 transition-colors duration-200"
+                            style={{ fontSize: '0.75rem', fontWeight: 500, color: '#86868b' }}
                           >
                             View all {inProgress.length} in-progress cases
                           </button>
                         )}
                       </div>
                     )}
-                  </div>
+                  </SectionCard>
                 </motion.div>
 
                 {completed.length > 0 && (
                   <motion.div
-                    initial={{ opacity: 0, y: 8 }}
+                    initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.35, delay: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                    transition={{ duration: 0.5, delay: 0.2, ease }}
                   >
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-[16px] h-[16px] text-semantic-success" />
-                        <h2 className="text-[13px] font-semibold text-grey-600">
+                        <CheckCircle2 className="w-3.5 h-3.5" style={{ color: '#34c759' }} />
+                        <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#6e6e73', letterSpacing: '-0.01em' }}>
                           Completed
-                        </h2>
-                        <span className="text-[12px] text-grey-400 font-medium tabular-nums">
+                        </span>
+                        <span
+                          style={{
+                            fontSize: '0.6875rem',
+                            fontWeight: 600,
+                            color: '#aeaeb2',
+                            fontVariantNumeric: 'tabular-nums',
+                          }}
+                        >
                           {completed.length}
                         </span>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
+                      <button
                         onClick={() => navigate('/cases')}
-                        rightIcon={<ArrowRight className="w-3.5 h-3.5" />}
+                        className="flex items-center gap-1 transition-colors duration-200 hover:opacity-70"
+                        style={{ fontSize: '0.75rem', fontWeight: 500, color: '#86868b' }}
                       >
                         View All
-                      </Button>
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -454,18 +428,35 @@ export function Dashboard() {
                         <motion.div
                           key={item.caseId}
                           onClick={() => handleProcessCase(item.caseId)}
-                          className="p-3 rounded-xl border-[0.5px] border-grey-200/60 bg-white hover:bg-grey-50/50 cursor-pointer transition-all duration-200 hover:shadow-card group"
+                          className="cursor-pointer group transition-all duration-300"
+                          style={{
+                            padding: '14px 16px',
+                            borderRadius: '14px',
+                            background: '#ffffff',
+                            border: '0.5px solid rgba(0, 0, 0, 0.06)',
+                            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
+                          }}
                           whileTap={{ scale: 0.98 }}
+                          whileHover={{ boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)' }}
                         >
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-full bg-semantic-success/8 flex items-center justify-center">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-semantic-success" />
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="w-8 h-8 rounded-full flex items-center justify-center"
+                              style={{ background: 'rgba(52, 199, 89, 0.08)' }}
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" style={{ color: '#34c759' }} />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-[13px] font-semibold text-grey-800 truncate">
+                              <p
+                                className="truncate"
+                                style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#1d1d1f', letterSpacing: '-0.01em' }}
+                              >
                                 {item.patientName}
                               </p>
-                              <p className="text-[11px] text-grey-400 truncate font-medium">
+                              <p
+                                className="truncate"
+                                style={{ fontSize: '0.6875rem', color: '#aeaeb2', fontWeight: 500 }}
+                              >
                                 {item.medication}
                               </p>
                             </div>
@@ -479,72 +470,124 @@ export function Dashboard() {
             )}
           </div>
 
-          <div className="space-y-4">
+          <div className="lg:col-span-4 space-y-5">
             <motion.div
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: 0.06, ease: [0.16, 1, 0.3, 1] }}
+              transition={{ duration: 0.5, delay: 0.08, ease }}
             >
-              <WorkspaceStats
-                stats={stats}
-                title="My Performance"
-              />
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <AIInsightCard
-                insight={aiInsight}
-                source="recent case patterns"
-              />
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <RecentActivity
-                activities={aiActivity}
-                onActivityClick={(activity) => {
-                  if (activity.caseId) {
-                    navigate(`/cases/${activity.caseId}`)
-                  }
-                }}
-                maxItems={5}
-              />
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: 0.24, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <div className="surface-card overflow-hidden">
-                <div className="px-4 py-3 border-b border-grey-100/80">
-                  <h3 className="text-[13px] font-semibold text-grey-800">Quick Actions</h3>
+              <SidebarCard title="Overview">
+                <div className="space-y-4">
+                  <StatRow
+                    icon={<CheckCircle2 className="w-3.5 h-3.5" style={{ color: '#34c759' }} />}
+                    label="Approved Today"
+                    value={stats.completedToday}
+                  />
+                  <StatRow
+                    icon={<Clock className="w-3.5 h-3.5" style={{ color: '#ff9500' }} />}
+                    label="Avg Processing"
+                    value={`${stats.avgProcessingDays.toFixed(1)}d`}
+                  />
+                  <StatRow
+                    icon={<Activity className="w-3.5 h-3.5" style={{ color: '#007aff' }} />}
+                    label="Success Rate"
+                    value={`${stats.successRate.toFixed(0)}%`}
+                  />
                 </div>
-                <div className="p-1.5">
-                  <QuickActionButton
-                    icon={<FileText className="w-[15px] h-[15px]" />}
+              </SidebarCard>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.16, ease }}
+            >
+              <SidebarCard
+                title="AI Insight"
+                icon={<Sparkles className="w-3 h-3" style={{ color: '#af52de' }} />}
+              >
+                <p style={{ fontSize: '0.8125rem', color: '#6e6e73', lineHeight: 1.6, letterSpacing: '-0.006em' }}>
+                  "{aiInsight}"
+                </p>
+                <p style={{ fontSize: '0.6875rem', color: '#aeaeb2', marginTop: '10px', fontWeight: 500 }}>
+                  Based on recent case patterns
+                </p>
+              </SidebarCard>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.24, ease }}
+            >
+              <SidebarCard
+                title="Recent Activity"
+                icon={<Clock className="w-3 h-3" style={{ color: '#86868b' }} />}
+              >
+                {aiActivity.length === 0 ? (
+                  <p style={{ fontSize: '0.8125rem', color: '#aeaeb2', textAlign: 'center', padding: '12px 0' }}>
+                    No recent activity
+                  </p>
+                ) : (
+                  <div className="space-y-0">
+                    {aiActivity.slice(0, 5).map((activity) => (
+                      <button
+                        key={activity.id}
+                        type="button"
+                        onClick={() => activity.caseId && navigate(`/cases/${activity.caseId}`)}
+                        className="w-full flex items-start gap-2.5 text-left transition-colors duration-150 rounded-lg"
+                        style={{ padding: '8px 4px' }}
+                      >
+                        <div
+                          className={`flex-shrink-0 rounded-full ${statusColors[activity.status || 'info']}`}
+                          style={{
+                            width: '6px',
+                            height: '6px',
+                            marginTop: '6px',
+                          }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="truncate" style={{ fontSize: '0.8125rem', color: '#6e6e73' }}>
+                            {activity.action}
+                          </p>
+                          <p style={{ fontSize: '0.6875rem', color: '#aeaeb2', marginTop: '1px', fontWeight: 500 }}>
+                            {new Date(activity.timestamp).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </SidebarCard>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.32, ease }}
+            >
+              <SidebarCard title="Quick Actions">
+                <div className="space-y-0.5">
+                  <QuickActionRow
+                    icon={<FileText className="w-[14px] h-[14px]" />}
                     label="View All Cases"
                     onClick={() => navigate('/cases')}
                   />
-                  <QuickActionButton
-                    icon={<FileText className="w-[15px] h-[15px]" />}
+                  <QuickActionRow
+                    icon={<BookOpen className="w-[14px] h-[14px]" />}
                     label="Policy Library"
                     onClick={() => navigate('/policies')}
                   />
-                  <QuickActionButton
-                    icon={<Settings className="w-[15px] h-[15px]" />}
+                  <QuickActionRow
+                    icon={<Settings className="w-[14px] h-[14px]" />}
                     label="Settings"
                     onClick={() => navigate('/settings')}
                   />
                 </div>
-              </div>
+              </SidebarCard>
             </motion.div>
           </div>
         </div>
@@ -553,7 +596,138 @@ export function Dashboard() {
   )
 }
 
-function QuickActionButton({
+function SectionCard({
+  icon,
+  title,
+  count,
+  children,
+}: {
+  icon: React.ReactNode
+  title: string
+  count?: number
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      style={{
+        background: '#ffffff',
+        borderRadius: '16px',
+        border: '0.5px solid rgba(0, 0, 0, 0.06)',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)',
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        className="flex items-center gap-2.5"
+        style={{
+          padding: '14px 20px',
+          borderBottom: '0.5px solid rgba(0, 0, 0, 0.04)',
+        }}
+      >
+        {icon}
+        <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#1d1d1f', letterSpacing: '-0.01em' }}>
+          {title}
+        </span>
+        {count !== undefined && (
+          <span
+            style={{
+              fontSize: '0.6875rem',
+              fontWeight: 600,
+              color: '#aeaeb2',
+              marginLeft: 'auto',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {count}
+          </span>
+        )}
+      </div>
+      <div style={{ padding: '12px 16px' }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function SidebarCard({
+  title,
+  icon,
+  children,
+}: {
+  title: string
+  icon?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      style={{
+        background: '#ffffff',
+        borderRadius: '16px',
+        border: '0.5px solid rgba(0, 0, 0, 0.06)',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)',
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        className="flex items-center gap-2"
+        style={{
+          padding: '12px 16px',
+          borderBottom: '0.5px solid rgba(0, 0, 0, 0.04)',
+        }}
+      >
+        {icon}
+        <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#1d1d1f', letterSpacing: '-0.01em' }}>
+          {title}
+        </span>
+      </div>
+      <div style={{ padding: '14px 16px' }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function StatRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode
+  label: string
+  value: string | number
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2.5">
+        <div
+          className="flex items-center justify-center"
+          style={{
+            width: '28px',
+            height: '28px',
+            borderRadius: '8px',
+            background: 'rgba(0, 0, 0, 0.03)',
+          }}
+        >
+          {icon}
+        </div>
+        <span style={{ fontSize: '0.8125rem', color: '#6e6e73', letterSpacing: '-0.006em' }}>{label}</span>
+      </div>
+      <span
+        style={{
+          fontSize: '1.0625rem',
+          fontWeight: 600,
+          color: '#1d1d1f',
+          letterSpacing: '-0.02em',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  )
+}
+
+function QuickActionRow({
   icon,
   label,
   onClick,
@@ -564,12 +738,21 @@ function QuickActionButton({
 }) {
   return (
     <button
-      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-grey-50/80 transition-colors duration-150 text-left group"
+      className="w-full flex items-center gap-3 rounded-xl group transition-colors duration-150"
+      style={{ padding: '10px 8px' }}
       onClick={onClick}
     >
-      <span className="text-grey-400">{icon}</span>
-      <span className="text-[13px] text-grey-600 flex-1 font-medium">{label}</span>
-      <ArrowRight className="w-3.5 h-3.5 text-grey-200 group-hover:text-grey-400 group-hover:translate-x-0.5 transition-all duration-200" />
+      <span style={{ color: '#aeaeb2' }}>{icon}</span>
+      <span
+        className="flex-1 text-left"
+        style={{ fontSize: '0.8125rem', color: '#6e6e73', fontWeight: 500, letterSpacing: '-0.006em' }}
+      >
+        {label}
+      </span>
+      <ArrowRight
+        className="w-3 h-3 transition-all duration-200 group-hover:translate-x-0.5"
+        style={{ color: '#d1d1d6' }}
+      />
     </button>
   )
 }
@@ -577,29 +760,112 @@ function QuickActionButton({
 function EmptyState({ onCreateCase }: { onCreateCase: () => void }) {
   return (
     <motion.div
-      className="p-12 surface-card text-center"
+      className="text-center"
       initial={{ opacity: 0, scale: 0.97 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      transition={{ duration: 0.5, ease }}
+      style={{
+        padding: '64px 32px',
+        background: '#ffffff',
+        borderRadius: '16px',
+        border: '0.5px solid rgba(0, 0, 0, 0.06)',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)',
+      }}
     >
-      <div className="w-14 h-14 rounded-2xl bg-grey-900 flex items-center justify-center mx-auto mb-4 shadow-md">
-        <Brain className="w-7 h-7 text-white" />
+      <div
+        className="flex items-center justify-center mx-auto mb-5"
+        style={{
+          width: '56px',
+          height: '56px',
+          borderRadius: '16px',
+          background: '#1d1d1f',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+        }}
+      >
+        <Brain className="w-6 h-6 text-white" />
       </div>
-      <h3 className="text-[17px] font-semibold text-grey-900 mb-1.5">
+      <h3 style={{ fontSize: '1.0625rem', fontWeight: 600, color: '#1d1d1f', letterSpacing: '-0.02em', marginBottom: '6px' }}>
         Ready to Process Cases
       </h3>
-      <p className="text-[13px] text-grey-400 max-w-sm mx-auto mb-6 leading-relaxed">
-        Create your first prior authorization case and let AI assist with policy analysis and strategy.
+      <p style={{ fontSize: '0.8125rem', color: '#86868b', maxWidth: '360px', margin: '0 auto 24px', lineHeight: 1.6, letterSpacing: '-0.006em' }}>
+        Create your first case and let AI assist with policy analysis and access strategy.
       </p>
-      <Button
-        variant="primary"
-        size="lg"
+      <button
         onClick={onCreateCase}
-        leftIcon={<Plus className="w-4 h-4" strokeWidth={2.5} />}
+        className="inline-flex items-center gap-2 transition-all duration-200 hover:shadow-md active:scale-[0.97]"
+        style={{
+          padding: '10px 24px',
+          background: '#1d1d1f',
+          color: '#ffffff',
+          borderRadius: '12px',
+          fontSize: '0.875rem',
+          fontWeight: 600,
+          letterSpacing: '-0.01em',
+          border: 'none',
+          cursor: 'pointer',
+        }}
       >
+        <Plus className="w-4 h-4" strokeWidth={2.5} />
         Create First Case
-      </Button>
+      </button>
     </motion.div>
+  )
+}
+
+function LoadingSkeleton() {
+  return (
+    <div
+      style={{
+        padding: '32px',
+        background: '#ffffff',
+        borderRadius: '16px',
+        border: '0.5px solid rgba(0, 0, 0, 0.06)',
+      }}
+    >
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl animate-pulse" style={{ background: 'rgba(0, 0, 0, 0.04)' }} />
+            <div className="flex-1 space-y-2">
+              <div className="h-3 rounded-full animate-pulse" style={{ width: '60%', background: 'rgba(0, 0, 0, 0.04)' }} />
+              <div className="h-2.5 rounded-full animate-pulse" style={{ width: '40%', background: 'rgba(0, 0, 0, 0.03)' }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ErrorState() {
+  return (
+    <div
+      className="text-center"
+      style={{
+        padding: '48px 32px',
+        background: '#ffffff',
+        borderRadius: '16px',
+        border: '0.5px solid rgba(0, 0, 0, 0.06)',
+      }}
+    >
+      <p style={{ fontSize: '0.8125rem', color: '#aeaeb2', marginBottom: '16px' }}>Failed to load cases</p>
+      <button
+        onClick={() => window.location.reload()}
+        className="transition-colors duration-200"
+        style={{
+          padding: '8px 16px',
+          background: 'rgba(0, 0, 0, 0.04)',
+          borderRadius: '10px',
+          fontSize: '0.8125rem',
+          fontWeight: 500,
+          color: '#6e6e73',
+          border: '0.5px solid rgba(0, 0, 0, 0.06)',
+          cursor: 'pointer',
+        }}
+      >
+        Retry
+      </button>
+    </div>
   )
 }
 

@@ -36,23 +36,23 @@ interface CaseQueueCardProps {
 const priorityConfig = {
   high: {
     icon: AlertTriangle,
-    color: 'text-semantic-error',
-    bg: 'bg-semantic-error/[0.03]',
-    border: 'border-semantic-error/10',
+    color: '#ff3b30',
+    bg: 'rgba(255, 59, 48, 0.03)',
+    border: 'rgba(255, 59, 48, 0.08)',
     label: 'Urgent',
   },
   medium: {
     icon: Clock,
-    color: 'text-semantic-warning',
-    bg: 'bg-semantic-warning/[0.03]',
-    border: 'border-semantic-warning/10',
+    color: '#ff9500',
+    bg: 'rgba(255, 149, 0, 0.03)',
+    border: 'rgba(255, 149, 0, 0.08)',
     label: 'Pending',
   },
   low: {
     icon: CheckCircle2,
-    color: 'text-grey-400',
-    bg: 'bg-grey-50/50',
-    border: 'border-grey-200/50',
+    color: '#aeaeb2',
+    bg: 'rgba(0, 0, 0, 0.01)',
+    border: 'rgba(0, 0, 0, 0.05)',
     label: 'On Track',
   },
 }
@@ -82,47 +82,62 @@ export function CaseQueueCard({
   if (variant === 'compact') {
     return (
       <motion.div
-        className={cn(
-          'flex items-center gap-3.5 p-3.5 rounded-xl border-[0.5px] cursor-pointer group',
-          'transition-all duration-200 ease-out-expo',
-          config.bg,
-          config.border,
-          'hover:shadow-card hover:bg-white',
-          className
-        )}
+        className={cn('flex items-center gap-3.5 cursor-pointer group', className)}
+        style={{
+          padding: '10px 12px',
+          borderRadius: '12px',
+          background: config.bg,
+          border: `0.5px solid ${config.border}`,
+          transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+        }}
         onClick={() => onProcess(item.caseId)}
         whileTap={{ scale: 0.99 }}
+        whileHover={{ boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)', background: '#ffffff' }}
       >
-        <div className={cn('flex-shrink-0', config.color)}>
-          <PriorityIcon className="w-[18px] h-[18px]" strokeWidth={2} />
+        <div className="flex-shrink-0">
+          <PriorityIcon className="w-4 h-4" style={{ color: config.color }} strokeWidth={2} />
         </div>
 
-        <div className="w-9 h-9 rounded-full bg-grey-100 flex items-center justify-center flex-shrink-0">
-          <span className="text-[12px] font-semibold text-grey-500">
+        <div
+          className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+          style={{ background: 'rgba(0, 0, 0, 0.04)' }}
+        >
+          <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: '#6e6e73' }}>
             {item.patientInitials}
           </span>
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-[13px] font-semibold text-grey-900 truncate">
+            <span className="truncate" style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#1d1d1f', letterSpacing: '-0.01em' }}>
               {item.patientName}
             </span>
-            <span className="text-grey-300 text-[11px]">&middot;</span>
-            <span className="text-[13px] text-grey-500 truncate">
+            <span style={{ color: '#d1d1d6', fontSize: '0.6875rem' }}>&middot;</span>
+            <span className="truncate" style={{ fontSize: '0.8125rem', color: '#6e6e73' }}>
               {item.medication}
             </span>
           </div>
           {item.aiStatus && (
             <div className="flex items-center gap-1.5 mt-0.5">
-              <Brain className="w-3 h-3 text-grey-300" />
-              <span className="text-[11px] text-grey-400 font-medium">{item.aiStatus}</span>
+              <Brain className="w-3 h-3" style={{ color: '#aeaeb2' }} />
+              <span style={{ fontSize: '0.6875rem', color: '#aeaeb2', fontWeight: 500 }}>{item.aiStatus}</span>
             </div>
           )}
         </div>
 
         <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-grey-900 text-white text-[12px] font-semibold rounded-lg shadow-sm">
+          <div
+            className="flex items-center gap-1.5"
+            style={{
+              padding: '5px 10px',
+              background: '#1d1d1f',
+              color: '#ffffff',
+              fontSize: '0.6875rem',
+              fontWeight: 600,
+              borderRadius: '8px',
+              letterSpacing: '-0.003em',
+            }}
+          >
             Process
             <ArrowRight className="w-3 h-3" />
           </div>
@@ -133,21 +148,21 @@ export function CaseQueueCard({
 
   return (
     <motion.div
-      className={cn(
-        'rounded-xl border-[0.5px] overflow-hidden cursor-pointer group',
-        'transition-all duration-200 ease-out-expo',
-        config.border,
-        'hover:shadow-elevated',
-        className
-      )}
+      className={cn('cursor-pointer group', className)}
+      style={{
+        borderRadius: '14px',
+        border: `0.5px solid ${config.border}`,
+        overflow: 'hidden',
+        transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+      }}
       onClick={() => onProcess(item.caseId)}
-      whileHover={{ y: -1 }}
+      whileHover={{ y: -1, boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)' }}
       whileTap={{ scale: 0.995 }}
     >
-      <div className={cn('px-4 py-2.5', config.bg)}>
+      <div style={{ padding: '10px 16px', background: config.bg }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <PriorityIcon className={cn('w-3.5 h-3.5', config.color)} />
+            <PriorityIcon className="w-3.5 h-3.5" style={{ color: config.color }} />
             <Badge
               variant={priority === 'high' ? 'error' : priority === 'medium' ? 'warning' : 'neutral'}
               size="sm"
@@ -155,40 +170,46 @@ export function CaseQueueCard({
               {config.label}
             </Badge>
           </div>
-          <span className="text-[11px] text-grey-400 font-medium">{item.payerName}</span>
+          <span style={{ fontSize: '0.6875rem', color: '#aeaeb2', fontWeight: 500 }}>{item.payerName}</span>
         </div>
       </div>
 
-      <div className="px-4 py-4 bg-white">
+      <div style={{ padding: '16px', background: '#ffffff' }}>
         <div className="flex items-start gap-3">
-          <div className="w-11 h-11 rounded-xl bg-grey-100 flex items-center justify-center flex-shrink-0">
-            <span className="text-[15px] font-semibold text-grey-500">
+          <div
+            className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'rgba(0, 0, 0, 0.04)' }}
+          >
+            <span style={{ fontSize: '0.9375rem', fontWeight: 600, color: '#6e6e73' }}>
               {item.patientInitials}
             </span>
           </div>
           <div className="flex-1 min-w-0">
-            <h4 className="text-[15px] font-semibold text-grey-900 truncate">
+            <h4 className="truncate" style={{ fontSize: '0.9375rem', fontWeight: 600, color: '#1d1d1f', letterSpacing: '-0.015em' }}>
               {item.patientName}
             </h4>
-            <p className="text-[13px] text-grey-500 truncate">{item.medication}</p>
+            <p className="truncate" style={{ fontSize: '0.8125rem', color: '#6e6e73' }}>{item.medication}</p>
           </div>
         </div>
 
         {item.aiStatus && (
-          <div className="mt-3 p-3 rounded-lg bg-grey-50/80">
+          <div
+            className="mt-3"
+            style={{ padding: '10px 12px', borderRadius: '10px', background: 'rgba(0, 0, 0, 0.02)' }}
+          >
             <div className="flex items-center gap-2">
-              <Brain className="w-3.5 h-3.5 text-grey-400" />
-              <span className="text-[13px] text-grey-600">{item.aiStatus}</span>
+              <Brain className="w-3.5 h-3.5" style={{ color: '#aeaeb2' }} />
+              <span style={{ fontSize: '0.8125rem', color: '#6e6e73' }}>{item.aiStatus}</span>
             </div>
             {item.confidence !== undefined && (
               <div className="mt-2 flex items-center gap-2">
-                <div className="flex-1 h-[3px] bg-grey-200 rounded-full overflow-hidden">
+                <div className="flex-1 h-[3px] rounded-full overflow-hidden" style={{ background: 'rgba(0, 0, 0, 0.06)' }}>
                   <div
-                    className="h-full bg-grey-800 rounded-full transition-all duration-500"
-                    style={{ width: `${item.confidence * 100}%` }}
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${item.confidence * 100}%`, background: '#1d1d1f' }}
                   />
                 </div>
-                <span className="text-[11px] text-grey-400 font-medium tabular-nums">
+                <span style={{ fontSize: '0.6875rem', color: '#aeaeb2', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
                   {Math.round(item.confidence * 100)}%
                 </span>
               </div>
@@ -198,7 +219,18 @@ export function CaseQueueCard({
 
         <motion.button
           type="button"
-          className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 bg-grey-900 text-white text-[13px] font-semibold rounded-lg shadow-sm"
+          className="mt-3 w-full flex items-center justify-center gap-2"
+          style={{
+            padding: '8px 16px',
+            background: '#1d1d1f',
+            color: '#ffffff',
+            fontSize: '0.8125rem',
+            fontWeight: 600,
+            borderRadius: '10px',
+            letterSpacing: '-0.006em',
+            border: 'none',
+            cursor: 'pointer',
+          }}
           whileTap={{ scale: 0.97 }}
           onClick={(e) => {
             e.stopPropagation()
@@ -239,12 +271,13 @@ export function CaseQueueList({
     <div>
       {title && (
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[13px] font-semibold text-grey-700">{title}</h3>
+          <h3 style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#6e6e73', letterSpacing: '-0.01em' }}>{title}</h3>
           {showViewAll && onViewAll && (
             <button
               type="button"
               onClick={onViewAll}
-              className="text-[12px] font-medium text-grey-400 hover:text-grey-600 transition-colors"
+              className="transition-colors duration-200"
+              style={{ fontSize: '0.75rem', fontWeight: 500, color: '#aeaeb2' }}
             >
               View all ({items.length})
             </button>
@@ -254,8 +287,8 @@ export function CaseQueueList({
 
       {displayItems.length === 0 ? (
         <div className="py-8 text-center">
-          <User className="w-7 h-7 text-grey-200 mx-auto mb-2" />
-          <p className="text-[13px] text-grey-400">{emptyMessage}</p>
+          <User className="w-7 h-7 mx-auto mb-2" style={{ color: '#d1d1d6' }} />
+          <p style={{ fontSize: '0.8125rem', color: '#aeaeb2' }}>{emptyMessage}</p>
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -271,7 +304,8 @@ export function CaseQueueList({
             <button
               type="button"
               onClick={onViewAll}
-              className="w-full py-2 text-[12px] font-medium text-grey-400 hover:text-grey-600 transition-colors"
+              className="w-full py-2 transition-colors duration-200"
+              style={{ fontSize: '0.75rem', fontWeight: 500, color: '#aeaeb2' }}
             >
               + {items.length - displayItems.length} more cases
             </button>
