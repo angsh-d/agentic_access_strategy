@@ -47,15 +47,18 @@ class StrategyGeneratorAgent:
         # Convert stored assessments to CoverageAssessment objects
         assessments = self._convert_assessments(case_state.coverage_assessments)
 
-        # Get primary and secondary payer from patient data
-        patient_data = case_state.patient_data or {}
-        primary_payer = patient_data.get("insurance", {}).get("primary", {}).get("payer_name")
-        secondary_payer = patient_data.get("insurance", {}).get("secondary", {}).get("payer_name")
-
-        # Fallback: try to get from case state patient object if available
-        if not primary_payer and hasattr(case_state, 'patient') and case_state.patient:
+        # Get primary and secondary payer from patient object
+        primary_payer = None
+        secondary_payer = None
+        if hasattr(case_state, 'patient') and case_state.patient:
             primary_payer = getattr(case_state.patient, 'primary_payer', None)
             secondary_payer = getattr(case_state.patient, 'secondary_payer', None)
+
+        # Fallback: try raw patient_data dict if available
+        if not primary_payer:
+            patient_data = getattr(case_state, 'patient_data', None) or {}
+            primary_payer = patient_data.get("insurance", {}).get("primary", {}).get("payer_name")
+            secondary_payer = patient_data.get("insurance", {}).get("secondary", {}).get("payer_name")
 
         # Generate strategies with proper payer ordering (always primary first)
         strategies = self.scorer.generate_strategies(

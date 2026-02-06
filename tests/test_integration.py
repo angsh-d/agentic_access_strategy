@@ -30,7 +30,6 @@ class TestIntakeAgent:
         assert case_state.patient.first_name == "Maria"
         assert case_state.patient.last_name == "Rodriguez"
         assert "Cigna" in case_state.payer_states
-        assert "UHC" in case_state.payer_states
 
     @pytest.mark.asyncio
     async def test_process_david_c_intake(self, intake_agent):
@@ -41,7 +40,6 @@ class TestIntakeAgent:
         assert case_state.patient.first_name == "David"
         assert case_state.patient.last_name == "Chen"
         assert "Cigna" in case_state.payer_states
-        assert "UHC" in case_state.payer_states
 
     @pytest.mark.asyncio
     async def test_intake_creates_medication_request(self, intake_agent):
@@ -68,16 +66,14 @@ class TestPolicyAnalyzer:
 
     def test_get_documentation_gaps_for_maria(self, policy_analyzer, maria_r_data):
         """Should get documentation gaps for Maria R. from patient data."""
-        # Maria has documentation gaps defined in her clinical profile
-        gaps = maria_r_data["clinical_profile"].get("documentation_gaps", [])
+        gaps = maria_r_data.get("documentation_gaps", [])
 
         # Maria has TB and Hep B screening gaps defined in her data
         assert len(gaps) >= 2
 
     def test_get_no_gaps_for_david(self, policy_analyzer, david_c_data):
         """Should get no documentation gaps for David C. from patient data."""
-        # David has no documentation gaps in his clinical profile
-        gaps = david_c_data["clinical_profile"].get("documentation_gaps", [])
+        gaps = david_c_data.get("documentation_gaps", [])
 
         # David has all documentation
         assert len(gaps) == 0
@@ -106,7 +102,7 @@ class TestRecoveryAgent:
 
         case_state = {
             "patient_data": maria_r_data,
-            "documentation_gaps": maria_r_data["clinical_profile"].get("documentation_gaps", [])
+            "documentation_gaps": maria_r_data.get("documentation_gaps", [])
         }
 
         classification = recovery_agent.classify_denial(denial, case_state)
@@ -146,7 +142,7 @@ class TestRecoveryAgent:
 
         case_state = {
             "patient_data": maria_r_data,
-            "payers": ["Cigna", "UHC"]
+            "payers": ["Cigna"]
         }
 
         strategies = recovery_agent.generate_recovery_strategies(
@@ -193,13 +189,16 @@ class TestMockPayerGateways:
 
         cigna_gateway.set_scenario("happy_path")
 
+        # Get diagnosis codes from diagnoses array
+        diagnosis_codes = [d["icd10_code"] for d in maria_r_data["diagnoses"]]
+
         submission = PASubmission(
             case_id="test-case-001",
             patient_member_id=maria_r_data["insurance"]["primary"]["member_id"],
             patient_name=f"{maria_r_data['demographics']['first_name']} {maria_r_data['demographics']['last_name']}",
             medication_name=maria_r_data["medication_request"]["medication_name"],
             medication_ndc=maria_r_data["medication_request"].get("ndc_code", "00000-0000-00"),
-            diagnosis_codes=[maria_r_data["medication_request"]["icd10_code"]],
+            diagnosis_codes=diagnosis_codes,
             prescriber_npi=maria_r_data["prescriber"]["npi"],
             prescriber_name=maria_r_data["prescriber"]["name"],
             clinical_rationale="Patient has moderate-to-severe Crohn's disease with perianal fistula requiring biologic therapy."
@@ -218,13 +217,16 @@ class TestMockPayerGateways:
 
         uhc_gateway.set_scenario("happy_path")
 
+        # Get diagnosis codes from diagnoses array
+        diagnosis_codes = [d["icd10_code"] for d in david_c_data["diagnoses"]]
+
         submission = PASubmission(
             case_id="test-case-002",
             patient_member_id=david_c_data["insurance"]["primary"]["member_id"],
             patient_name=f"{david_c_data['demographics']['first_name']} {david_c_data['demographics']['last_name']}",
             medication_name=david_c_data["medication_request"]["medication_name"],
             medication_ndc=david_c_data["medication_request"].get("ndc_code", "00000-0000-00"),
-            diagnosis_codes=[david_c_data["medication_request"]["icd10_code"]],
+            diagnosis_codes=diagnosis_codes,
             prescriber_npi=david_c_data["prescriber"]["npi"],
             prescriber_name=david_c_data["prescriber"]["name"],
             clinical_rationale="Patient has moderate-to-severe Crohn's disease with inadequate response to conventional therapy."
@@ -260,13 +262,10 @@ class TestEndToEndFlow:
         assert len(uhc_policy) > 100000, "UHC policy should be real, not stub"
 
     def test_patient_payer_alignment(self, all_patients):
-        """Both patients should have dual coverage with same payers."""
+        """Both patients should have Cigna as primary payer."""
         for patient_id, data in all_patients.items():
             primary = data["insurance"]["primary"]["payer_name"]
-            secondary = data["insurance"]["secondary"]["payer_name"]
-
             assert primary == "Cigna", f"{patient_id} should have Cigna primary"
-            assert secondary == "UHC", f"{patient_id} should have UHC secondary"
 
     def test_infliximab_request_alignment_with_policies(self, all_patients, cigna_policy, uhc_policy):
         """Patient medication requests should align with policies."""

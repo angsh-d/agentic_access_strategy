@@ -255,6 +255,10 @@ class TestStrategySelection:
         """Create mock case state."""
         from backend.models.case_state import CaseState, PatientInfo, MedicationRequest, PayerState
 
+        # Get diagnosis codes from diagnoses array
+        diagnosis_codes = [d["icd10_code"] for d in maria_r_data["diagnoses"]]
+        primary_icd10 = diagnosis_codes[0] if diagnosis_codes else "K50.913"
+
         return CaseState(
             case_id=str(uuid4()),
             patient=PatientInfo(
@@ -264,9 +268,7 @@ class TestStrategySelection:
                 date_of_birth=maria_r_data["demographics"]["date_of_birth"],
                 primary_payer="Cigna",
                 primary_member_id=maria_r_data["insurance"]["primary"]["member_id"],
-                secondary_payer="UHC",
-                secondary_member_id=maria_r_data["insurance"]["secondary"]["member_id"],
-                diagnosis_codes=[maria_r_data["medication_request"]["icd10_code"]]
+                diagnosis_codes=diagnosis_codes
             ),
             medication=MedicationRequest(
                 medication_name=maria_r_data["medication_request"]["medication_name"],
@@ -274,10 +276,10 @@ class TestStrategySelection:
                 ndc_code=maria_r_data["medication_request"].get("ndc_code", "00000-0000-00"),
                 dose=maria_r_data["medication_request"]["dose"],
                 route=maria_r_data["medication_request"]["route"],
-                frequency=maria_r_data["medication_request"]["frequency"],
+                frequency=str(maria_r_data["medication_request"]["frequency"]),
                 duration="ongoing",
                 diagnosis="Crohn's disease with perianal fistula",
-                icd10_code=maria_r_data["medication_request"]["icd10_code"],
+                icd10_code=primary_icd10,
                 prescriber_npi=maria_r_data["prescriber"]["npi"],
                 prescriber_name=maria_r_data["prescriber"]["name"],
                 clinical_rationale="Patient has moderate-to-severe Crohn's disease requiring biologic therapy."

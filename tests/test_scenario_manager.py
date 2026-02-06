@@ -135,7 +135,7 @@ class TestScenarioPatientCompatibility:
         config = scenario_manager.set_scenario(scenario_enum.MISSING_DOCS)
 
         # Maria has documentation gaps
-        gaps = maria_r_data["clinical_profile"].get("documentation_gaps", [])
+        gaps = maria_r_data.get("documentation_gaps", [])
         assert len(gaps) > 0, "Maria should have gaps for this scenario"
 
     def test_happy_path_ideal_for_david(self, scenario_manager, scenario_enum, david_c_data):
@@ -143,7 +143,7 @@ class TestScenarioPatientCompatibility:
         config = scenario_manager.set_scenario(scenario_enum.HAPPY_PATH)
 
         # David has no documentation gaps
-        gaps = david_c_data["clinical_profile"].get("documentation_gaps", [])
+        gaps = david_c_data.get("documentation_gaps", [])
         assert len(gaps) == 0, "David should have no gaps for clean happy path"
 
     def test_biosimilar_redirect_relevant_for_maria(self, scenario_manager, scenario_enum, maria_r_data):
