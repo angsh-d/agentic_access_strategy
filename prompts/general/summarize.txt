@@ -1,0 +1,7 @@
+Summarize the following text in {max_length} characters or less.
+Focus on key points and maintain clinical accuracy.
+
+Text to summarize:
+{text}
+
+Summary:

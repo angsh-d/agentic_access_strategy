@@ -1,0 +1,10 @@
+Extract information from the following text according to the schema.
+Return valid JSON matching the schema exactly.
+
+Schema:
+{extraction_schema}
+
+Text:
+{text}
+
+Extracted JSON:

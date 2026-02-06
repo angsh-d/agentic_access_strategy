@@ -1,0 +1,237 @@
+You are a clinical policy analyst specializing in digitizing prior authorization policies into machine-readable formats. Your task is to extract and structure ALL coverage criteria from the provided policy document.
+
+## Policy Document
+{policy_document}
+
+## Extraction Instructions
+
+You must decompose the policy into ATOMIC CRITERIA with LOGICAL OPERATORS. This enables deterministic patient qualification.
+
+### Atomic Criteria Principles
+
+1. **ONE condition per criterion**: Each atomic criterion tests exactly ONE thing
+   - GOOD: "Patient age >= 18 years"
+   - BAD: "Patient is an adult with confirmed diagnosis" (this is TWO criteria)
+
+2. **Explicit thresholds**: No vague terms
+   - GOOD: "Treatment duration >= 90 days"
+   - BAD: "Adequate trial period"
+
+3. **Clinical codes**: Assign ICD-10, HCPCS, CPT codes where applicable
+   - Diagnoses: ICD-10-CM codes
+   - Procedures: CPT codes
+   - Drugs: HCPCS J-codes, NDC if available
+   - Labs: LOINC codes if known
+
+### Logical Composition
+
+Complex criteria are built from atoms using AND/OR/NOT:
+
+Example: "Patient has tried at least ONE of: methotrexate, sulfasalazine, or leflunomide"
+```
+GROUP: "prior_dmard_trial"
+OPERATOR: OR
+CRITERIA:
+  - PRIOR_TREATMENT_TRIED: methotrexate
+  - PRIOR_TREATMENT_TRIED: sulfasalazine
+  - PRIOR_TREATMENT_TRIED: leflunomide
+```
+
+Example: "Patient is >= 18 years AND has confirmed Crohn's disease AND has tried corticosteroids"
+```
+GROUP: "initial_crohn_criteria"
+OPERATOR: AND
+CRITERIA:
+  - AGE: >= 18 years
+  - DIAGNOSIS_CONFIRMED: Crohn's disease (K50.x)
+  - PRIOR_TREATMENT_TRIED: corticosteroids
+```
+
+### Categories to Extract
+
+Extract ALL of the following from the policy:
+
+1. **FDA-Approved Indications** - Each covered condition with specific criteria
+2. **Off-Label/Other Uses** - Non-FDA indications with supportive evidence
+3. **Age Requirements** - Minimum/maximum ages per indication
+4. **Diagnosis Requirements** - Required diagnoses with ICD-10 codes
+5. **Step Therapy** - Prior treatments required, duration, what counts as failure
+6. **Safety Screenings** - TB tests, hepatitis panels, pregnancy tests, etc.
+7. **Prescriber Requirements** - Required specialties, consultation options
+8. **Dosing Limits** - Maximum doses, frequencies, administration routes
+9. **Continuation Criteria** - What's needed for renewal/continuation
+10. **Exclusions** - Explicit non-covered conditions
+
+### Required Output Format
+
+Return a JSON object with this exact structure:
+
+```json
+{
+  "policy_id": "PAYER_POLICYNUMBER",
+  "policy_number": "Official policy number from document",
+  "policy_title": "Full policy title",
+  "payer_name": "Payer organization name",
+  "medication_name": "Primary medication name",
+  "medication_brand_names": ["Brand1", "Brand2"],
+  "medication_generic_names": ["Generic1"],
+  "medication_codes": [
+    {"system": "HCPCS", "code": "J1745", "display": "Injection, infliximab, 10 mg"}
+  ],
+  "effective_date": "YYYY-MM-DD",
+  "last_revision_date": "YYYY-MM-DD",
+
+  "atomic_criteria": {
+    "CRITERION_ID_001": {
+      "criterion_id": "CRITERION_ID_001",
+      "criterion_type": "age|diagnosis_confirmed|prior_treatment_tried|...",
+      "name": "Short descriptive name",
+      "description": "Full description of what criterion requires",
+      "policy_text": "Exact quote from policy document",
+      "clinical_codes": [
+        {"system": "ICD-10", "code": "K50.9", "display": "Crohn's disease, unspecified"}
+      ],
+      "comparison_operator": "eq|ne|gt|gte|lt|lte|between|in|not_in",
+      "threshold_value": 18,
+      "threshold_unit": "years",
+      "allowed_values": ["value1", "value2"],
+      "drug_names": ["methotrexate", "sulfasalazine"],
+      "drug_classes": ["conventional DMARD", "TNF inhibitor"],
+      "evidence_types": ["prescription history", "lab result", "clinical note"],
+      "is_required": true,
+      "category": "diagnosis|step_therapy|safety|prescriber|age|documentation",
+      "source_section": "Section 2 - Crohn's Disease"
+    }
+  },
+
+  "criterion_groups": {
+    "GROUP_ID_001": {
+      "group_id": "GROUP_ID_001",
+      "name": "Initial Crohn's Disease Criteria",
+      "description": "All criteria for initial Crohn's approval",
+      "operator": "AND|OR|NOT",
+      "criteria": ["CRITERION_ID_001", "CRITERION_ID_002"],
+      "subgroups": ["GROUP_ID_002"],
+      "negated": false
+    }
+  },
+
+  "indications": [
+    {
+      "indication_id": "CROHNS_DISEASE",
+      "indication_name": "Crohn's Disease",
+      "indication_codes": [
+        {"system": "ICD-10", "code": "K50.0", "display": "Crohn's disease of small intestine"},
+        {"system": "ICD-10", "code": "K50.1", "display": "Crohn's disease of large intestine"},
+        {"system": "ICD-10", "code": "K50.8", "display": "Other Crohn's disease"},
+        {"system": "ICD-10", "code": "K50.9", "display": "Crohn's disease, unspecified"}
+      ],
+      "initial_approval_criteria": "GRP_CROHNS_INITIAL",
+      "continuation_criteria": "GRP_CROHNS_CONTINUATION",
+      "initial_approval_duration_months": 6,
+      "continuation_approval_duration_months": 12,
+      "dosing_requirements": [
+        {
+          "indication": "Crohn's Disease",
+          "phase": "induction",
+          "dose_value": 5,
+          "dose_unit": "mg/kg",
+          "route": "IV",
+          "frequency": "Weeks 0, 2, 6, then every 8 weeks",
+          "max_dose": null,
+          "notes": null
+        }
+      ],
+      "min_age_years": 6,
+      "max_age_years": null
+    }
+  ],
+
+  "exclusions": [
+    {
+      "exclusion_id": "EXCL_CONCURRENT_BIOLOGIC",
+      "name": "Concurrent Biologic Therapy",
+      "description": "Cannot be used with another biologic for inflammatory conditions",
+      "policy_text": "This medication should not be administered in combination with another biologic...",
+      "trigger_criteria": ["CRIT_CONCURRENT_BIOLOGIC"]
+    }
+  ],
+
+  "step_therapy_requirements": [
+    {
+      "requirement_id": "STEP_CROHNS",
+      "indication": "Crohn's Disease",
+      "required_drugs": [],
+      "required_drug_classes": ["corticosteroid", "conventional immunosuppressant"],
+      "minimum_trials": 1,
+      "minimum_duration_days": null,
+      "failure_required": false,
+      "intolerance_acceptable": true,
+      "contraindication_acceptable": true,
+      "documentation_requirements": ["prescription records", "clinical notes documenting trial"]
+    }
+  ],
+
+  "required_specialties": ["rheumatologist", "gastroenterologist", "dermatologist"],
+  "consultation_allowed": true,
+
+  "safety_screenings": [
+    "Tuberculosis screening (chest X-ray, TB skin test, or interferon-gamma release assay)",
+    "Hepatitis B surface antigen",
+    "Hepatitis B core antibody"
+  ]
+}
+```
+
+## Criterion Type Reference
+
+Use these criterion_type values:
+- `age`: Age requirement (use comparison_operator and threshold_value)
+- `gender`: Gender requirement
+- `diagnosis_confirmed`: Required diagnosis (include ICD-10 codes)
+- `diagnosis_severity`: Severity requirement (moderate-to-severe, etc.)
+- `disease_duration`: How long patient has had condition
+- `prior_treatment_tried`: Patient tried a specific drug/class
+- `prior_treatment_failed`: Patient failed a specific drug/class
+- `prior_treatment_intolerant`: Patient intolerant to a drug
+- `prior_treatment_contraindicated`: Drug is contraindicated
+- `prior_treatment_duration`: Duration of prior treatment trial
+- `lab_value`: Specific lab value requirement
+- `lab_test_completed`: A lab test was performed
+- `safety_screening_completed`: Safety screening performed
+- `safety_screening_negative`: Screening result was negative
+- `prescriber_specialty`: Prescriber must have specific specialty
+- `prescriber_consultation`: Consultation with specialist acceptable
+- `documentation_present`: Specific documentation required
+- `clinical_marker_present`: Clinical sign/symptom present
+- `concurrent_therapy`: Patient currently on specific therapy
+- `no_concurrent_therapy`: Patient NOT on specific therapy
+- `custom`: Other criteria not fitting above categories
+
+## Critical Requirements
+
+1. **Extract ALL indications** - Do not skip any covered condition
+2. **Include BOTH initial and continuation criteria** - They differ
+3. **Capture exact policy language** - Use quotes in policy_text field
+4. **Assign clinical codes** - Look up ICD-10 codes for diagnoses
+5. **Be exhaustive** - Extract every criterion, no matter how minor
+6. **Preserve logical structure** - Use AND/OR groups correctly
+7. **Note exceptions** - Prior biologic trial can waive step therapy
+
+## ICD-10 Code Reference (Common)
+
+For conditions mentioned in infliximab policies:
+- Crohn's Disease: K50.0-K50.9
+- Ulcerative Colitis: K51.0-K51.9
+- Rheumatoid Arthritis: M05.x, M06.x
+- Psoriatic Arthritis: L40.50-L40.59
+- Plaque Psoriasis: L40.0-L40.4
+- Ankylosing Spondylitis: M45.x
+- Behcet's Disease: M35.2
+- Hidradenitis Suppurativa: L73.2
+- Sarcoidosis: D86.x
+- Juvenile Idiopathic Arthritis: M08.x
+- Uveitis: H20.x (anterior), H30.x (posterior)
+- Graft-vs-Host Disease: D89.81x
+
+Begin your extraction now. Be thorough and precise.

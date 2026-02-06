@@ -1,0 +1,12 @@
+Draft a professional {notification_type} notification.
+
+Context:
+{context}
+
+Requirements:
+- Professional and clear tone
+- Include all relevant details
+- Actionable next steps if applicable
+- HIPAA compliant language
+
+Notification:
