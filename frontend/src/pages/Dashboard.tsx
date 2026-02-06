@@ -1,16 +1,3 @@
-/**
- * Dashboard - PA Specialist Workspace
- *
- * REDESIGNED following persona-driven UX principles:
- * - "My Queue" is the hero - actionable cases front and center
- * - Cases grouped: Needs Attention -> In Progress -> Completed
- * - Direct "Process" action - one click to start working
- * - AI metrics in sidebar, not center stage
- * - Performance is secondary to the work queue
- *
- * Mental model: "I come to work, see my cases for the day, and process them one by one"
- */
-
 import { useMemo, useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
@@ -44,7 +31,6 @@ import { ENDPOINTS, QUERY_KEYS, CACHE_TIMES } from '@/lib/constants'
 import { getInitials } from '@/lib/utils'
 import type { CaseState, CaseStage, PayerStatus } from '@/types/case'
 
-// Transform CaseState to CaseQueueItem for display
 function toCaseQueueItem(caseState: CaseState): CaseQueueItem {
   const primaryPayerName = caseState.patient.primary_payer
   const primaryPayer = caseState.payer_states[primaryPayerName]
@@ -52,7 +38,6 @@ function toCaseQueueItem(caseState: CaseState): CaseQueueItem {
   const confidence = assessment?.approval_likelihood ?? 0.5
   const patientName = `${caseState.patient.first_name} ${caseState.patient.last_name}`
 
-  // Determine AI status message based on stage
   const aiStatusMap: Record<CaseStage, string> = {
     intake: 'Ready for review',
     policy_analysis: 'AI analyzing policy',
@@ -80,25 +65,20 @@ function toCaseQueueItem(caseState: CaseState): CaseQueueItem {
   }
 }
 
-// Get priority based on stage and status
 function getCasePriority(stage: CaseStage, payerStatus: PayerStatus): 'high' | 'medium' | 'low' {
-  // High priority: needs immediate human action
   if (stage === 'awaiting_human_decision') return 'high'
   if (stage === 'strategy_selection') return 'high'
   if (stage === 'failed') return 'high'
   if (payerStatus === 'pending_info') return 'high'
 
-  // Medium priority: in progress, automated
   if (stage === 'policy_analysis') return 'medium'
   if (stage === 'strategy_generation') return 'medium'
   if (stage === 'action_coordination') return 'medium'
   if (payerStatus === 'under_review') return 'medium'
 
-  // Low priority: completed or early stage
   return 'low'
 }
 
-// Categorize cases for display
 function categorizeCases(cases: CaseState[]): {
   needsAttention: CaseQueueItem[]
   inProgress: CaseQueueItem[]
@@ -124,7 +104,6 @@ function categorizeCases(cases: CaseState[]): {
   return { needsAttention, inProgress, completed }
 }
 
-// Type for API activity response
 interface APIActivityItem {
   id: string
   agent_type: string
@@ -143,7 +122,6 @@ interface APIActivityResponse {
   total: number
 }
 
-// Fetch real AI activity from backend using central API client
 async function fetchAIActivity() {
   const { request } = await import('@/services/api')
   const data: APIActivityResponse = await request(ENDPOINTS.recentActivity)
@@ -176,7 +154,6 @@ export function Dashboard() {
     }
   }, [])
 
-  // Delayed navigation for simulating real-time processing
   const delayedNavigate = async (to: string, label?: string) => {
     if (!mountedRef.current) return
     setIsNavigating(true)
@@ -191,26 +168,23 @@ export function Dashboard() {
     navigate(to)
   }
 
-  // Fetch real AI activity from backend - uses polling for real-time updates
   const { data: aiActivity = [] } = useQuery({
     queryKey: QUERY_KEYS.aiActivity,
     queryFn: fetchAIActivity,
-    staleTime: CACHE_TIMES.REALTIME, // 5 seconds - real-time data
+    staleTime: CACHE_TIMES.REALTIME,
     gcTime: CACHE_TIMES.GC_TIME,
-    refetchInterval: 60 * 1000, // Poll every minute for updates
+    refetchInterval: 60 * 1000,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   })
 
-  // Transform and categorize cases
   const rawCases = data?.cases ?? []
   const { needsAttention, inProgress, completed } = useMemo(
     () => categorizeCases(rawCases),
     [rawCases]
   )
 
-  // Calculate performance stats
   const stats: StatItem[] = useMemo(() => {
     const todayStart = new Date()
     todayStart.setHours(0, 0, 0, 0)
@@ -258,7 +232,6 @@ export function Dashboard() {
     ]
   }, [rawCases])
 
-  // Generate AI insight based on data
   const aiInsight = useMemo(() => {
     if (needsAttention.length > 3) {
       return `You have ${needsAttention.length} cases that need attention. Consider prioritizing human decision gates first.`
@@ -277,7 +250,6 @@ export function Dashboard() {
     delayedNavigate('/cases/new', 'Creating new case...')
   }
 
-  // Get current time greeting
   const getGreeting = () => {
     const hour = new Date().getHours()
     if (hour < 12) return 'Good morning'
@@ -286,39 +258,44 @@ export function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-grey-50">
-      {/* Full-page loading overlay */}
+    <div className="min-h-screen">
       {isNavigating && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="fixed inset-0 bg-white/90 backdrop-blur-sm z-50 flex items-center justify-center"
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-white/80 backdrop-blur-md z-50 flex items-center justify-center"
         >
-          <div className="text-center">
-            <div className="w-16 h-16 rounded-2xl bg-grey-900 flex items-center justify-center mx-auto mb-4 shadow-lg">
-              <Loader2 className="w-8 h-8 text-white animate-spin" />
+          <motion.div
+            className="text-center"
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.1, duration: 0.3, ease: [0.34, 1.56, 0.64, 1] }}
+          >
+            <div className="w-14 h-14 rounded-2xl bg-grey-900 flex items-center justify-center mx-auto mb-4 shadow-lg">
+              <Loader2 className="w-6 h-6 text-white animate-spin" />
             </div>
-            <p className="text-grey-700 font-medium">{navigatingTo || 'Loading...'}</p>
-            <p className="text-sm text-grey-500 mt-1">Please wait</p>
-          </div>
+            <p className="text-[15px] text-grey-800 font-semibold">{navigatingTo || 'Loading...'}</p>
+            <p className="text-[13px] text-grey-400 mt-1">Please wait</p>
+          </motion.div>
         </motion.div>
       )}
 
-      {/* Header */}
-      <div className="bg-white border-b border-grey-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+      <div className="glass-header sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-6 py-3.5">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-semibold text-grey-900">
+              <h1 className="text-[20px] font-semibold text-grey-900 tracking-tight">
                 {getGreeting()}
               </h1>
-              <p className="text-sm text-grey-500">PA Specialist Workspace</p>
+              <p className="text-[13px] text-grey-400 font-medium mt-0.5">PA Specialist Workspace</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <Button
                 variant="primary"
+                size="md"
                 onClick={handleCreateCase}
-                leftIcon={<Plus className="w-4 h-4" />}
+                leftIcon={<Plus className="w-3.5 h-3.5" strokeWidth={2.5} />}
               >
                 New Case
               </Button>
@@ -327,26 +304,23 @@ export function Dashboard() {
                 size="sm"
                 onClick={() => navigate('/settings')}
               >
-                <Settings className="w-5 h-5 text-grey-400" />
+                <Settings className="w-[18px] h-[18px] text-grey-400" />
               </Button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Column - Case Queue */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Needs Attention - High Priority */}
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-5">
             {isLoading ? (
               <GlassPanel variant="default" padding="lg">
                 <SkeletonList count={3} />
               </GlassPanel>
             ) : error ? (
               <GlassPanel variant="default" padding="lg" className="text-center">
-                <p className="text-grey-500">Failed to load cases</p>
+                <p className="text-[13px] text-grey-400">Failed to load cases</p>
                 <Button
                   variant="secondary"
                   size="sm"
@@ -360,30 +334,29 @@ export function Dashboard() {
               <EmptyState onCreateCase={handleCreateCase} />
             ) : (
               <>
-                {/* Needs Attention Section */}
                 <motion.div
-                  initial={{ opacity: 0, y: 10 }}
+                  initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
+                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
                 >
-                  <GlassPanel variant="default" padding="lg">
+                  <div className="surface-card p-5">
                     <div className="flex items-center gap-2 mb-4">
-                      <AlertTriangle className="w-5 h-5 text-semantic-error" />
-                      <h2 className="text-lg font-semibold text-grey-900">
+                      <AlertTriangle className="w-[18px] h-[18px] text-semantic-error" strokeWidth={2} />
+                      <h2 className="text-[15px] font-semibold text-grey-900">
                         Needs Attention
                       </h2>
-                      <span className="ml-auto text-sm font-medium text-grey-500">
-                        {needsAttention.length} cases
+                      <span className="ml-auto text-[12px] font-semibold text-grey-400 tabular-nums">
+                        {needsAttention.length}
                       </span>
                     </div>
 
                     {needsAttention.length === 0 ? (
-                      <div className="py-6 text-center text-sm text-grey-500">
-                        <CheckCircle2 className="w-8 h-8 text-semantic-success mx-auto mb-2" />
-                        All caught up! No cases need immediate attention.
+                      <div className="py-8 text-center">
+                        <CheckCircle2 className="w-7 h-7 text-semantic-success mx-auto mb-2" />
+                        <p className="text-[13px] text-grey-400">All caught up! No cases need immediate attention.</p>
                       </div>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         {needsAttention.slice(0, 5).map((item) => (
                           <CaseQueueCard
                             key={item.caseId}
@@ -396,39 +369,38 @@ export function Dashboard() {
                           <button
                             type="button"
                             onClick={() => navigate('/cases')}
-                            className="w-full py-2 text-sm text-grey-500 hover:text-grey-700 transition-colors"
+                            className="w-full py-2 text-[12px] font-medium text-grey-400 hover:text-grey-600 transition-colors"
                           >
                             + {needsAttention.length - 5} more cases needing attention
                           </button>
                         )}
                       </div>
                     )}
-                  </GlassPanel>
+                  </div>
                 </motion.div>
 
-                {/* In Progress Section */}
                 <motion.div
-                  initial={{ opacity: 0, y: 10 }}
+                  initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.1 }}
+                  transition={{ duration: 0.35, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
                 >
-                  <GlassPanel variant="light" padding="lg">
+                  <div className="surface-card p-5">
                     <div className="flex items-center gap-2 mb-4">
-                      <Clock className="w-5 h-5 text-semantic-warning" />
-                      <h2 className="text-lg font-semibold text-grey-900">
+                      <Clock className="w-[18px] h-[18px] text-semantic-warning" strokeWidth={2} />
+                      <h2 className="text-[15px] font-semibold text-grey-900">
                         In Progress
                       </h2>
-                      <span className="ml-auto text-sm font-medium text-grey-500">
-                        {inProgress.length} cases
+                      <span className="ml-auto text-[12px] font-semibold text-grey-400 tabular-nums">
+                        {inProgress.length}
                       </span>
                     </div>
 
                     {inProgress.length === 0 ? (
-                      <div className="py-6 text-center text-sm text-grey-500">
-                        No cases currently in progress.
+                      <div className="py-8 text-center">
+                        <p className="text-[13px] text-grey-400">No cases currently in progress.</p>
                       </div>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         {inProgress.slice(0, 5).map((item) => (
                           <CaseQueueCard
                             key={item.caseId}
@@ -441,64 +413,64 @@ export function Dashboard() {
                           <button
                             type="button"
                             onClick={() => navigate('/cases')}
-                            className="w-full py-2 text-sm text-grey-500 hover:text-grey-700 transition-colors"
+                            className="w-full py-2 text-[12px] font-medium text-grey-400 hover:text-grey-600 transition-colors"
                           >
                             View all {inProgress.length} in-progress cases
                           </button>
                         )}
                       </div>
                     )}
-                  </GlassPanel>
+                  </div>
                 </motion.div>
 
-                {/* Completed Today */}
                 {completed.length > 0 && (
                   <motion.div
-                    initial={{ opacity: 0, y: 10 }}
+                    initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: 0.2 }}
+                    transition={{ duration: 0.35, delay: 0.16, ease: [0.16, 1, 0.3, 1] }}
                   >
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-5 h-5 text-semantic-success" />
-                        <h2 className="text-sm font-semibold text-grey-700">
+                        <CheckCircle2 className="w-[16px] h-[16px] text-semantic-success" />
+                        <h2 className="text-[13px] font-semibold text-grey-600">
                           Completed
                         </h2>
-                        <span className="text-sm text-grey-500">
-                          {completed.length} cases
+                        <span className="text-[12px] text-grey-400 font-medium tabular-nums">
+                          {completed.length}
                         </span>
                       </div>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => navigate('/cases')}
-                        rightIcon={<ArrowRight className="w-4 h-4" />}
+                        rightIcon={<ArrowRight className="w-3.5 h-3.5" />}
                       >
                         View All
                       </Button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {completed.slice(0, 4).map((item) => (
-                        <div
+                        <motion.div
                           key={item.caseId}
                           onClick={() => handleProcessCase(item.caseId)}
-                          className="p-3 rounded-lg border border-grey-200 bg-white hover:bg-grey-50 cursor-pointer transition-colors"
+                          className="p-3 rounded-xl border-[0.5px] border-grey-200/60 bg-white hover:bg-grey-50/50 cursor-pointer transition-all duration-200 hover:shadow-card group"
+                          whileTap={{ scale: 0.98 }}
                         >
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-semantic-success/10 flex items-center justify-center">
-                              <CheckCircle2 className="w-4 h-4 text-semantic-success" />
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-semantic-success/8 flex items-center justify-center">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-semantic-success" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-grey-900 truncate">
+                              <p className="text-[13px] font-semibold text-grey-800 truncate">
                                 {item.patientName}
                               </p>
-                              <p className="text-xs text-grey-500 truncate">
+                              <p className="text-[11px] text-grey-400 truncate font-medium">
                                 {item.medication}
                               </p>
                             </div>
                           </div>
-                        </div>
+                        </motion.div>
                       ))}
                     </div>
                   </motion.div>
@@ -507,13 +479,11 @@ export function Dashboard() {
             )}
           </div>
 
-          {/* Sidebar - Performance & Insights */}
-          <div className="space-y-6">
-            {/* Performance Stats */}
+          <div className="space-y-4">
             <motion.div
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3, delay: 0.1 }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.06, ease: [0.16, 1, 0.3, 1] }}
             >
               <WorkspaceStats
                 stats={stats}
@@ -521,11 +491,10 @@ export function Dashboard() {
               />
             </motion.div>
 
-            {/* AI Insight */}
             <motion.div
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3, delay: 0.2 }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
             >
               <AIInsightCard
                 insight={aiInsight}
@@ -533,11 +502,10 @@ export function Dashboard() {
               />
             </motion.div>
 
-            {/* Recent Activity */}
             <motion.div
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3, delay: 0.3 }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
             >
               <RecentActivity
                 activities={aiActivity}
@@ -550,29 +518,28 @@ export function Dashboard() {
               />
             </motion.div>
 
-            {/* Quick Actions */}
             <motion.div
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3, delay: 0.4 }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.24, ease: [0.16, 1, 0.3, 1] }}
             >
-              <div className="rounded-xl border border-grey-200 bg-white overflow-hidden">
-                <div className="px-4 py-3 border-b border-grey-100">
-                  <h3 className="text-sm font-semibold text-grey-900">Quick Actions</h3>
+              <div className="surface-card overflow-hidden">
+                <div className="px-4 py-3 border-b border-grey-100/80">
+                  <h3 className="text-[13px] font-semibold text-grey-800">Quick Actions</h3>
                 </div>
-                <div className="p-2">
+                <div className="p-1.5">
                   <QuickActionButton
-                    icon={<FileText className="w-4 h-4" />}
+                    icon={<FileText className="w-[15px] h-[15px]" />}
                     label="View All Cases"
                     onClick={() => navigate('/cases')}
                   />
                   <QuickActionButton
-                    icon={<FileText className="w-4 h-4" />}
+                    icon={<FileText className="w-[15px] h-[15px]" />}
                     label="Policy Library"
                     onClick={() => navigate('/policies')}
                   />
                   <QuickActionButton
-                    icon={<Settings className="w-4 h-4" />}
+                    icon={<Settings className="w-[15px] h-[15px]" />}
                     label="Settings"
                     onClick={() => navigate('/settings')}
                   />
@@ -586,9 +553,6 @@ export function Dashboard() {
   )
 }
 
-/**
- * Quick Action Button
- */
 function QuickActionButton({
   icon,
   label,
@@ -600,41 +564,40 @@ function QuickActionButton({
 }) {
   return (
     <button
-      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-grey-100 transition-colors text-left group"
+      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-grey-50/80 transition-colors duration-150 text-left group"
       onClick={onClick}
     >
       <span className="text-grey-400">{icon}</span>
-      <span className="text-sm text-grey-700 flex-1">{label}</span>
-      <ArrowRight className="w-4 h-4 text-grey-300 group-hover:text-grey-500 group-hover:translate-x-0.5 transition-all" />
+      <span className="text-[13px] text-grey-600 flex-1 font-medium">{label}</span>
+      <ArrowRight className="w-3.5 h-3.5 text-grey-200 group-hover:text-grey-400 group-hover:translate-x-0.5 transition-all duration-200" />
     </button>
   )
 }
 
-/**
- * Empty State
- */
 function EmptyState({ onCreateCase }: { onCreateCase: () => void }) {
   return (
     <motion.div
-      className="p-12 rounded-2xl bg-white border border-grey-200 text-center"
-      initial={{ opacity: 0, scale: 0.95 }}
+      className="p-12 surface-card text-center"
+      initial={{ opacity: 0, scale: 0.97 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
     >
-      <div className="w-16 h-16 rounded-2xl bg-grey-900 flex items-center justify-center mx-auto mb-4 shadow-md">
-        <Sparkles className="w-8 h-8 text-white" />
+      <div className="w-14 h-14 rounded-2xl bg-grey-900 flex items-center justify-center mx-auto mb-4 shadow-md">
+        <Brain className="w-7 h-7 text-white" />
       </div>
-      <h3 className="text-lg font-semibold text-grey-900 mb-2">Welcome to Your Workspace</h3>
-      <p className="text-grey-500 mb-6 max-w-md mx-auto">
-        Start processing prior authorization requests with AI assistance.
-        Create your first case to get started.
+      <h3 className="text-[17px] font-semibold text-grey-900 mb-1.5">
+        Ready to Process Cases
+      </h3>
+      <p className="text-[13px] text-grey-400 max-w-sm mx-auto mb-6 leading-relaxed">
+        Create your first prior authorization case and let AI assist with policy analysis and strategy.
       </p>
       <Button
         variant="primary"
+        size="lg"
         onClick={onCreateCase}
-        leftIcon={<Brain className="w-4 h-4" />}
+        leftIcon={<Plus className="w-4 h-4" strokeWidth={2.5} />}
       >
-        Create Your First Case
+        Create First Case
       </Button>
     </motion.div>
   )

@@ -1,15 +1,13 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutGrid,
   FolderOpen,
   FileText,
   Settings,
   Plus,
-  ChevronRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui'
 
 interface NavItem {
   path: string
@@ -18,10 +16,10 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { path: '/', label: 'Dashboard', icon: <LayoutGrid className="w-5 h-5" /> },
-  { path: '/cases', label: 'Cases', icon: <FolderOpen className="w-5 h-5" /> },
-  { path: '/policies', label: 'Policies', icon: <FileText className="w-5 h-5" /> },
-  { path: '/settings', label: 'Settings', icon: <Settings className="w-5 h-5" /> },
+  { path: '/', label: 'Dashboard', icon: <LayoutGrid className="w-[18px] h-[18px]" /> },
+  { path: '/cases', label: 'Cases', icon: <FolderOpen className="w-[18px] h-[18px]" /> },
+  { path: '/policies', label: 'Policies', icon: <FileText className="w-[18px] h-[18px]" /> },
+  { path: '/settings', label: 'Settings', icon: <Settings className="w-[18px] h-[18px]" /> },
 ]
 
 export function Sidebar() {
@@ -29,16 +27,15 @@ export function Sidebar() {
 
   return (
     <aside className="glass-sidebar fixed left-0 top-0 h-full w-64 flex flex-col z-40">
-      {/* Logo / Brand */}
-      <div className="h-16 flex items-center px-6 border-b border-grey-200/50">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-grey-900 flex items-center justify-center">
+      <div className="h-14 flex items-center px-5">
+        <div className="flex items-center gap-2.5">
+          <div className="w-[30px] h-[30px] rounded-[8px] bg-grey-900 flex items-center justify-center shadow-sm">
             <svg
-              className="w-5 h-5 text-white"
+              className="w-[16px] h-[16px] text-white"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
-              strokeWidth={2}
+              strokeWidth={2.2}
             >
               <path
                 strokeLinecap="round"
@@ -47,87 +44,95 @@ export function Sidebar() {
               />
             </svg>
           </div>
-          <span className="font-semibold text-grey-900 tracking-tight">
+          <span className="font-semibold text-[15px] text-grey-900 tracking-tight">
             Access Strategy
           </span>
         </div>
       </div>
 
-      {/* Quick Action */}
-      <div className="px-4 py-4">
+      <div className="px-3 pt-1 pb-3">
         <NavLink to="/cases/new">
-          <Button
-            variant="primary"
-            size="md"
-            className="w-full justify-start"
-            leftIcon={<Plus className="w-4 h-4" />}
+          <motion.button
+            className="w-full h-[38px] flex items-center justify-center gap-2 rounded-xl bg-grey-900 text-white text-[13px] font-semibold shadow-sm"
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
           >
+            <Plus className="w-4 h-4" strokeWidth={2.5} />
             New Case
-          </Button>
+          </motion.button>
         </NavLink>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-3 py-2 space-y-1">
-        {navItems.map((item) => {
-          const isActive = item.path === '/'
-            ? location.pathname === '/'
-            : location.pathname.startsWith(item.path)
+      <nav className="flex-1 px-3 py-1">
+        <div className="space-y-0.5">
+          {navItems.map((item) => {
+            const isActive = item.path === '/'
+              ? location.pathname === '/'
+              : location.pathname.startsWith(item.path)
 
-          return (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className="block"
-            >
-              <motion.div
-                className={cn(
-                  'glass-nav-item flex items-center gap-3',
-                  isActive && 'active'
-                )}
-                whileHover={{ x: 2 }}
-                whileTap={{ scale: 0.98 }}
-                transition={{ duration: 0.15 }}
+            return (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className="block"
               >
-                <span className={cn(
-                  'text-grey-500',
-                  isActive && 'text-grey-900'
-                )}>
-                  {item.icon}
-                </span>
-                <span className={cn(
-                  'text-sm text-grey-600',
-                  isActive && 'text-grey-900 font-medium'
-                )}>
-                  {item.label}
-                </span>
-                {isActive && (
-                  <ChevronRight className="w-4 h-4 text-grey-400 ml-auto" />
-                )}
-              </motion.div>
-            </NavLink>
-          )
-        })}
+                <motion.div
+                  className={cn(
+                    'relative flex items-center gap-3 px-3 py-[9px] rounded-[10px] transition-colors duration-200',
+                    isActive
+                      ? 'bg-black/[0.06]'
+                      : 'hover:bg-black/[0.03]'
+                  )}
+                  whileTap={{ scale: 0.98 }}
+                  transition={{ duration: 0.1 }}
+                >
+                  <span className={cn(
+                    'transition-colors duration-200',
+                    isActive ? 'text-grey-900' : 'text-grey-400'
+                  )}>
+                    {item.icon}
+                  </span>
+                  <span className={cn(
+                    'text-[13px] transition-colors duration-200',
+                    isActive ? 'text-grey-900 font-semibold' : 'text-grey-500 font-medium'
+                  )}>
+                    {item.label}
+                  </span>
+                  <AnimatePresence>
+                    {isActive && (
+                      <motion.div
+                        className="ml-auto w-1.5 h-1.5 rounded-full bg-grey-900"
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        transition={{ duration: 0.2, ease: [0.34, 1.56, 0.64, 1] }}
+                      />
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              </NavLink>
+            )
+          })}
+        </div>
       </nav>
 
-      {/* Scenario Selector (Demo Mode) */}
-      <div className="px-4 py-4 border-t border-grey-200/50">
-        <div className="p-3 rounded-xl bg-grey-100/80">
-          <p className="text-label mb-2">Demo Scenario</p>
+      <div className="px-3 pb-3">
+        <div className="p-3 rounded-xl bg-black/[0.03]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-grey-400 mb-1.5">Demo Scenario</p>
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-grey-700">
+            <span className="text-[13px] font-medium text-grey-700">
               Maria R.
             </span>
-            <span className="text-xs text-grey-500">
+            <span className="text-[11px] text-grey-400 font-medium">
               Ozempic PA
             </span>
           </div>
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="px-4 py-3 border-t border-grey-200/50">
-        <p className="text-xs text-grey-400 text-center">
+      <div className="px-3 pb-3">
+        <p className="text-[11px] text-grey-300 text-center font-medium">
           Agentic Access v1.0
         </p>
       </div>

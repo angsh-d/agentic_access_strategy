@@ -13,18 +13,18 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
 
     const variants = {
       default: cn(
-        'bg-grey-100 border border-grey-200/50'
+        'bg-white border-[0.5px] border-grey-200/60 shadow-subtle'
       ),
       elevated: cn(
-        'bg-white shadow-card border border-grey-100'
+        'bg-white shadow-card border-[0.5px] border-grey-100/80'
       ),
       outlined: cn(
-        'bg-transparent border border-grey-200'
+        'bg-transparent border-[0.5px] border-grey-200'
       ),
       interactive: cn(
-        'bg-grey-100 border border-grey-200/50',
+        'bg-white border-[0.5px] border-grey-200/60 shadow-subtle',
         'transition-all duration-normal ease-out-expo',
-        'hover:bg-white hover:shadow-card hover:border-grey-200',
+        'hover:shadow-elevated hover:border-grey-200',
         'cursor-pointer'
       ),
     }
@@ -32,12 +32,12 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
     const paddings = {
       none: '',
       sm: 'p-4',
-      md: 'p-6',
-      lg: 'p-8',
+      md: 'p-5',
+      lg: 'p-6',
     }
 
     const motionProps = variant === 'interactive' ? {
-      whileHover: { y: -2 },
+      whileHover: { y: -1 },
       whileTap: { scale: 0.995 },
       transition: { duration: 0.2, ease: [0.16, 1, 0.3, 1] },
     } : {}
@@ -57,14 +57,13 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
 
 Card.displayName = 'Card'
 
-// Card subcomponents
 const CardHeader = forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn('flex flex-col space-y-1.5', className)}
+    className={cn('flex flex-col space-y-1', className)}
     {...props}
   />
 ))
@@ -76,7 +75,7 @@ const CardTitle = forwardRef<
 >(({ className, ...props }, ref) => (
   <h3
     ref={ref}
-    className={cn('text-xl font-semibold text-grey-900 tracking-tight', className)}
+    className={cn('text-lg font-semibold text-grey-900', className)}
     {...props}
   />
 ))

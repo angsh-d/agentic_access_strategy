@@ -28,13 +28,13 @@ const Progress = forwardRef<HTMLDivElement, ProgressProps>(
     const percentage = Math.min(Math.max((value / max) * 100, 0), 100)
 
     const sizes = {
-      sm: 'h-1',
-      md: 'h-1.5',
-      lg: 'h-2',
+      sm: 'h-[3px]',
+      md: 'h-[4px]',
+      lg: 'h-[6px]',
     }
 
     const barColors = {
-      default: 'bg-grey-900',
+      default: 'bg-grey-800',
       success: 'bg-semantic-success',
       warning: 'bg-semantic-warning',
       error: 'bg-semantic-error',
@@ -48,15 +48,15 @@ const Progress = forwardRef<HTMLDivElement, ProgressProps>(
       >
         {showValue && (
           <div className="flex justify-between items-center mb-2">
-            <span className="text-sm text-grey-500">Progress</span>
-            <span className="text-sm font-medium text-grey-700">
+            <span className="text-[12px] text-grey-400 font-medium">Progress</span>
+            <span className="text-[12px] font-semibold text-grey-700 tabular-nums">
               {percentage.toFixed(0)}%
             </span>
           </div>
         )}
         <div
           className={cn(
-            'w-full bg-grey-200 rounded-full overflow-hidden',
+            'w-full bg-grey-200/60 rounded-full overflow-hidden',
             sizes[size]
           )}
         >
@@ -65,7 +65,7 @@ const Progress = forwardRef<HTMLDivElement, ProgressProps>(
             initial={animated ? { width: 0 } : false}
             animate={{ width: `${percentage}%` }}
             transition={{
-              duration: 0.5,
+              duration: 0.6,
               ease: [0.16, 1, 0.3, 1],
             }}
           />
@@ -77,7 +77,6 @@ const Progress = forwardRef<HTMLDivElement, ProgressProps>(
 
 Progress.displayName = 'Progress'
 
-// Circular progress variant
 export interface CircularProgressProps extends React.HTMLAttributes<HTMLDivElement> {
   value: number
   size?: number
@@ -92,7 +91,7 @@ const CircularProgress = forwardRef<HTMLDivElement, CircularProgressProps>(
       className,
       value,
       size = 48,
-      strokeWidth = 4,
+      strokeWidth = 3,
       variant = 'default',
       showValue = false,
       ...props
@@ -105,7 +104,7 @@ const CircularProgress = forwardRef<HTMLDivElement, CircularProgressProps>(
     const offset = circumference - (percentage / 100) * circumference
 
     const strokeColors = {
-      default: 'stroke-grey-900',
+      default: 'stroke-grey-800',
       success: 'stroke-semantic-success',
       warning: 'stroke-semantic-warning',
       error: 'stroke-semantic-error',
@@ -123,16 +122,14 @@ const CircularProgress = forwardRef<HTMLDivElement, CircularProgressProps>(
           width={size}
           height={size}
         >
-          {/* Background circle */}
           <circle
-            className="stroke-grey-200"
+            className="stroke-grey-200/60"
             fill="none"
             strokeWidth={strokeWidth}
             r={radius}
             cx={size / 2}
             cy={size / 2}
           />
-          {/* Progress circle */}
           <motion.circle
             className={cn('transition-all', strokeColors[variant])}
             fill="none"
@@ -145,13 +142,13 @@ const CircularProgress = forwardRef<HTMLDivElement, CircularProgressProps>(
             animate={{ strokeDashoffset: offset }}
             style={{ strokeDasharray: circumference }}
             transition={{
-              duration: 0.5,
+              duration: 0.6,
               ease: [0.16, 1, 0.3, 1],
             }}
           />
         </svg>
         {showValue && (
-          <span className="absolute text-sm font-semibold text-grey-700">
+          <span className="absolute text-[12px] font-semibold text-grey-700 tabular-nums">
             {percentage.toFixed(0)}
           </span>
         )}

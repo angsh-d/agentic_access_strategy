@@ -27,15 +27,15 @@ const MetricCard = forwardRef<HTMLDivElement, MetricCardProps>(
     ref
   ) => {
     const trendIcons = {
-      up: <TrendingUp className="w-3.5 h-3.5" />,
-      down: <TrendingDown className="w-3.5 h-3.5" />,
-      neutral: <Minus className="w-3.5 h-3.5" />,
+      up: <TrendingUp className="w-3 h-3" />,
+      down: <TrendingDown className="w-3 h-3" />,
+      neutral: <Minus className="w-3 h-3" />,
     }
 
     const trendColors = {
       up: 'text-semantic-success',
       down: 'text-semantic-error',
-      neutral: 'text-grey-400',
+      neutral: 'text-grey-300',
     }
 
     if (variant === 'compact') {
@@ -43,7 +43,7 @@ const MetricCard = forwardRef<HTMLDivElement, MetricCardProps>(
         <div
           ref={ref}
           className={cn(
-            'flex items-center gap-3 p-3 rounded-xl bg-grey-100',
+            'flex items-center gap-3 p-3 rounded-xl bg-grey-50',
             className
           )}
         >
@@ -53,13 +53,13 @@ const MetricCard = forwardRef<HTMLDivElement, MetricCardProps>(
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-grey-500 truncate">{label}</p>
-            <p className="text-lg font-semibold text-grey-900">{value}</p>
+            <p className="text-[11px] text-grey-400 truncate font-medium">{label}</p>
+            <p className="text-[17px] font-semibold text-grey-900 tabular-nums">{value}</p>
           </div>
           {trend && (
-            <div className={cn('flex items-center gap-1', trendColors[trend])}>
+            <div className={cn('flex items-center gap-0.5', trendColors[trend])}>
               {trendIcons[trend]}
-              {trendValue && <span className="text-xs font-medium">{trendValue}</span>}
+              {trendValue && <span className="text-[11px] font-semibold">{trendValue}</span>}
             </div>
           )}
         </div>
@@ -70,30 +70,30 @@ const MetricCard = forwardRef<HTMLDivElement, MetricCardProps>(
       <motion.div
         ref={ref}
         className={cn(
-          'p-6 rounded-2xl bg-grey-100 border border-grey-200/50',
+          'p-5 surface-card',
           className
         )}
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="flex items-start justify-between mb-2">
           <span className="text-label">{label}</span>
           {icon && (
-            <span className="text-grey-400">
+            <span className="text-grey-300">
               {icon}
             </span>
           )}
         </div>
         <div className="flex items-end gap-3">
-          <span className="text-4xl font-semibold text-grey-900 tracking-tight">
+          <span className="text-4xl font-semibold text-grey-900 tabular-nums">
             {value}
           </span>
           {trend && (
-            <div className={cn('flex items-center gap-1 mb-1', trendColors[trend])}>
+            <div className={cn('flex items-center gap-0.5 mb-1', trendColors[trend])}>
               {trendIcons[trend]}
               {trendValue && (
-                <span className="text-sm font-medium">{trendValue}</span>
+                <span className="text-[12px] font-semibold">{trendValue}</span>
               )}
             </div>
           )}

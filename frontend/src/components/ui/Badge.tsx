@@ -22,31 +22,21 @@ const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
     ref
   ) => {
     const baseStyles = cn(
-      'inline-flex items-center font-medium rounded-full',
+      'inline-flex items-center font-semibold rounded-full',
       'no-select'
     )
 
     const variants = {
-      neutral: cn(
-        'bg-grey-200 text-grey-700'
-      ),
-      success: cn(
-        'bg-semantic-success/10 text-semantic-success'
-      ),
-      warning: cn(
-        'bg-semantic-warning/10 text-semantic-warning'
-      ),
-      error: cn(
-        'bg-semantic-error/10 text-semantic-error'
-      ),
-      info: cn(
-        'bg-semantic-info/10 text-semantic-info'
-      ),
+      neutral: 'bg-grey-100 text-grey-600',
+      success: 'bg-semantic-success/8 text-semantic-success',
+      warning: 'bg-semantic-warning/8 text-semantic-warning',
+      error: 'bg-semantic-error/8 text-semantic-error',
+      info: 'bg-accent-light text-accent',
     }
 
     const sizes = {
-      sm: 'text-xs px-2 py-0.5 gap-1',
-      md: 'text-sm px-2.5 py-1 gap-1.5',
+      sm: 'text-[10px] px-2 py-[2px] gap-1',
+      md: 'text-[11px] px-2.5 py-[3px] gap-1.5',
     }
 
     const dotColors = {
@@ -54,7 +44,7 @@ const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
       success: 'bg-semantic-success',
       warning: 'bg-semantic-warning',
       error: 'bg-semantic-error',
-      info: 'bg-semantic-info',
+      info: 'bg-accent',
     }
 
     return (
@@ -66,7 +56,7 @@ const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
         {dot && (
           <span
             className={cn(
-              'w-1.5 h-1.5 rounded-full',
+              'w-[5px] h-[5px] rounded-full',
               dotColors[variant],
               pulse && 'animate-pulse-subtle'
             )}

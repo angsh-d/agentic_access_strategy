@@ -32,7 +32,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="block text-sm font-medium text-grey-700 mb-1.5"
+            className="block text-[13px] font-semibold text-grey-700 mb-1.5"
           >
             {label}
           </label>
@@ -49,13 +49,13 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             type={type}
             disabled={disabled}
             className={cn(
-              'w-full h-10 px-3 text-sm text-grey-900 rounded-xl',
-              'bg-white border border-grey-200',
-              'placeholder:text-grey-400',
+              'w-full h-[38px] px-3 text-[14px] text-grey-900 rounded-xl',
+              'bg-white border-[0.5px] border-grey-200',
+              'placeholder:text-grey-300',
               'transition-all duration-fast ease-out-expo',
-              'focus:outline-none focus:border-grey-400 focus:ring-2 focus:ring-grey-200',
-              'disabled:bg-grey-100 disabled:cursor-not-allowed disabled:opacity-50',
-              error && 'border-semantic-error focus:border-semantic-error focus:ring-semantic-error/20',
+              'focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-accent/10',
+              'disabled:bg-grey-50 disabled:cursor-not-allowed disabled:opacity-40',
+              error && 'border-semantic-error focus:border-semantic-error focus:ring-semantic-error/10',
               leftIcon && 'pl-10',
               rightIcon && 'pr-10',
               className
@@ -71,8 +71,8 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         {(helperText || error) && (
           <p
             className={cn(
-              'mt-1.5 text-xs',
-              error ? 'text-semantic-error' : 'text-grey-500'
+              'mt-1.5 text-[11px] font-medium',
+              error ? 'text-semantic-error' : 'text-grey-400'
             )}
           >
             {error || helperText}
@@ -85,7 +85,6 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
 Input.displayName = 'Input'
 
-// Textarea variant
 export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string
   helperText?: string
@@ -112,7 +111,7 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         {label && (
           <label
             htmlFor={textareaId}
-            className="block text-sm font-medium text-grey-700 mb-1.5"
+            className="block text-[13px] font-semibold text-grey-700 mb-1.5"
           >
             {label}
           </label>
@@ -122,14 +121,14 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           id={textareaId}
           disabled={disabled}
           className={cn(
-            'w-full min-h-[100px] px-3 py-2.5 text-sm text-grey-900 rounded-xl',
-            'bg-white border border-grey-200',
-            'placeholder:text-grey-400',
+            'w-full min-h-[100px] px-3 py-2.5 text-[14px] text-grey-900 rounded-xl',
+            'bg-white border-[0.5px] border-grey-200',
+            'placeholder:text-grey-300',
             'transition-all duration-fast ease-out-expo',
-            'focus:outline-none focus:border-grey-400 focus:ring-2 focus:ring-grey-200',
-            'disabled:bg-grey-100 disabled:cursor-not-allowed disabled:opacity-50',
+            'focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-accent/10',
+            'disabled:bg-grey-50 disabled:cursor-not-allowed disabled:opacity-40',
             'resize-y',
-            error && 'border-semantic-error focus:border-semantic-error focus:ring-semantic-error/20',
+            error && 'border-semantic-error focus:border-semantic-error focus:ring-semantic-error/10',
             className
           )}
           {...props}
@@ -137,8 +136,8 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         {(helperText || error) && (
           <p
             className={cn(
-              'mt-1.5 text-xs',
-              error ? 'text-semantic-error' : 'text-grey-500'
+              'mt-1.5 text-[11px] font-medium',
+              error ? 'text-semantic-error' : 'text-grey-400'
             )}
           >
             {error || helperText}
