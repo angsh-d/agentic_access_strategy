@@ -556,10 +556,11 @@ export function ExtractedDataReview({
                     setPdfViewerDoc(null)
                     setIsDocViewerMaximized(false)
                   }}
-                  className="p-1.5 hover:bg-grey-800 rounded-lg transition-colors"
+                  className="p-2 hover:bg-grey-700 rounded-lg transition-colors"
+                  style={{ background: 'rgba(255,255,255,0.1)' }}
                   title="Close panel"
                 >
-                  <X className="w-4 h-4 text-grey-400" />
+                  <X className="w-5 h-5 text-white" />
                 </button>
               </div>
             </div>
