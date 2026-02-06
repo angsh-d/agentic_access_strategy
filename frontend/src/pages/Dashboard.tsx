@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Plus,
-  FileText,
   ArrowRight,
   Brain,
   AlertTriangle,
@@ -12,9 +11,6 @@ import {
   CheckCircle2,
   Sparkles,
   Activity,
-  BookOpen,
-  Settings,
-  Zap,
 } from 'lucide-react'
 import {
   CaseQueueCard,
@@ -174,7 +170,7 @@ export function Dashboard() {
     if (completed.length > 0) {
       return `${completed.length} cases completed. Cases with complete documentation show higher approval rates.`
     }
-    return 'Ready to assist with policy analysis. Create a case to begin.'
+    return 'Ready to assist with policy analysis. Create a case to begin AI-powered prior authorization.'
   }, [needsAttention, completed])
 
   const getGreeting = () => {
@@ -184,671 +180,597 @@ export function Dashboard() {
     return 'Good evening'
   }
 
+  if (isLoading) return <LoadingSkeleton />
+  if (error) return <ErrorState />
+
+  const hasCases = rawCases.length > 0
+
   return (
-    <div className="min-h-screen" style={{ background: '#f5f5f7' }}>
-      {/* ─── Hero Header ─── */}
-      <div style={{ background: '#ffffff', borderBottom: '0.5px solid rgba(0,0,0,0.06)' }}>
-        <div className="max-w-[980px] mx-auto px-6 pt-10 pb-10">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, ease }}
-          >
-            <div className="flex items-start justify-between mb-8">
-              <div>
-                <h1
-                  style={{
-                    fontSize: 'clamp(2rem, 4vw, 2.75rem)',
-                    fontWeight: 700,
-                    color: '#1d1d1f',
-                    letterSpacing: '-0.035em',
-                    lineHeight: 1.1,
-                  }}
-                >
-                  {getGreeting()}.
-                </h1>
-                <p style={{
-                  fontSize: '1.0625rem',
-                  color: '#86868b',
-                  marginTop: '8px',
-                  letterSpacing: '-0.012em',
-                  lineHeight: 1.5,
-                }}>
-                  Access Strategy Workspace
-                </p>
-              </div>
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  onClick={() => navigate('/settings')}
-                  className="transition-all duration-200 hover:bg-black/[0.06]"
-                  style={{
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: 'rgba(0,0,0,0.03)',
-                    border: 'none',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <Settings className="w-[18px] h-[18px]" style={{ color: '#86868b' }} />
-                </button>
-                <motion.button
-                  onClick={() => navigate('/cases/new')}
-                  className="transition-all duration-200"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '10px 20px',
-                    background: '#1d1d1f',
-                    color: '#ffffff',
-                    borderRadius: '980px',
-                    fontSize: '0.875rem',
-                    fontWeight: 600,
-                    letterSpacing: '-0.01em',
-                    border: 'none',
-                    cursor: 'pointer',
-                  }}
-                  whileHover={{ scale: 1.02, boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }}
-                  whileTap={{ scale: 0.97 }}
-                >
-                  <Plus className="w-4 h-4" strokeWidth={2.5} />
-                  New Case
-                </motion.button>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* ─── Stat Tiles ─── */}
-          <motion.div
-            className="grid grid-cols-2 md:grid-cols-4 gap-4"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.1, ease }}
-          >
-            <StatTile label="Total Cases" value={stats.totalCases} icon={<FileText className="w-4 h-4" />} />
-            <StatTile label="Approved Today" value={stats.completedToday} icon={<CheckCircle2 className="w-4 h-4" />} accent="#34c759" />
-            <StatTile label="Avg Processing" value={`${stats.avgProcessingDays.toFixed(1)}d`} icon={<Clock className="w-4 h-4" />} accent="#ff9500" />
-            <StatTile label="Success Rate" value={`${stats.successRate.toFixed(0)}%`} icon={<Activity className="w-4 h-4" />} accent="#007aff" />
-          </motion.div>
-        </div>
-      </div>
-
-      {/* ─── Main Content ─── */}
-      <div className="max-w-[980px] mx-auto px-6 py-10">
-        {isLoading ? (
-          <LoadingSkeleton />
-        ) : error ? (
-          <ErrorState />
-        ) : rawCases.length === 0 ? (
-          <EmptyState onCreateCase={() => navigate('/cases/new')} />
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* ─── Left: Case Queue ─── */}
-            <div className="lg:col-span-2 space-y-8">
-              {needsAttention.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, ease }}
-                >
-                  <SectionHeader
-                    icon={<AlertTriangle className="w-[15px] h-[15px]" style={{ color: '#ff3b30' }} strokeWidth={2.2} />}
-                    title="Needs Attention"
-                    count={needsAttention.length}
-                  />
-                  <div
-                    className="mt-4 space-y-2"
-                    style={{
-                      background: '#ffffff',
-                      borderRadius: '20px',
-                      padding: '8px',
-                      border: '0.5px solid rgba(0,0,0,0.06)',
-                      boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-                    }}
-                  >
-                    {needsAttention.slice(0, 5).map((item) => (
-                      <CaseQueueCard
-                        key={item.caseId}
-                        item={item}
-                        onProcess={(id) => navigate(`/cases/${id}`)}
-                        variant="compact"
-                      />
-                    ))}
-                    {needsAttention.length > 5 && (
-                      <ViewMoreButton onClick={() => navigate('/cases')} count={needsAttention.length - 5} />
-                    )}
-                  </div>
-                </motion.div>
-              )}
-
-              {needsAttention.length === 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, ease }}
-                >
-                  <div
-                    className="text-center"
-                    style={{
-                      background: '#ffffff',
-                      borderRadius: '20px',
-                      padding: '40px 24px',
-                      border: '0.5px solid rgba(0,0,0,0.06)',
-                      boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-                    }}
-                  >
-                    <div
-                      className="mx-auto mb-4 flex items-center justify-center"
-                      style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'rgba(52,199,89,0.1)' }}
-                    >
-                      <CheckCircle2 className="w-6 h-6" style={{ color: '#34c759' }} />
-                    </div>
-                    <p style={{ fontSize: '1.0625rem', fontWeight: 600, color: '#1d1d1f', letterSpacing: '-0.02em' }}>
-                      All clear
-                    </p>
-                    <p style={{ fontSize: '0.875rem', color: '#86868b', marginTop: '4px' }}>
-                      No cases need your immediate attention.
-                    </p>
-                  </div>
-                </motion.div>
-              )}
-
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.12, ease }}
-              >
-                <SectionHeader
-                  icon={<Clock className="w-[15px] h-[15px]" style={{ color: '#ff9500' }} strokeWidth={2.2} />}
-                  title="In Progress"
-                  count={inProgress.length}
-                />
-                <div
-                  className="mt-4"
-                  style={{
-                    background: '#ffffff',
-                    borderRadius: '20px',
-                    padding: '8px',
-                    border: '0.5px solid rgba(0,0,0,0.06)',
-                    boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-                  }}
-                >
-                  {inProgress.length === 0 ? (
-                    <div className="text-center" style={{ padding: '32px 24px' }}>
-                      <p style={{ fontSize: '0.875rem', color: '#86868b' }}>
-                        No cases currently in progress.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {inProgress.slice(0, 5).map((item) => (
-                        <CaseQueueCard
-                          key={item.caseId}
-                          item={item}
-                          onProcess={(id) => navigate(`/cases/${id}`)}
-                          variant="compact"
-                        />
-                      ))}
-                      {inProgress.length > 5 && (
-                        <ViewMoreButton onClick={() => navigate('/cases')} count={inProgress.length - 5} label="in-progress cases" />
-                      )}
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-
-              {completed.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.24, ease }}
-                >
-                  <SectionHeader
-                    icon={<CheckCircle2 className="w-[15px] h-[15px]" style={{ color: '#34c759' }} strokeWidth={2.2} />}
-                    title="Completed"
-                    count={completed.length}
-                    action={{ label: 'View All', onClick: () => navigate('/cases') }}
-                  />
-                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {completed.slice(0, 4).map((item) => (
-                      <motion.div
-                        key={item.caseId}
-                        onClick={() => navigate(`/cases/${item.caseId}`)}
-                        className="cursor-pointer group"
-                        style={{
-                          padding: '16px 18px',
-                          background: '#ffffff',
-                          borderRadius: '16px',
-                          border: '0.5px solid rgba(0,0,0,0.06)',
-                          boxShadow: '0 1px 4px rgba(0,0,0,0.02)',
-                          transition: 'all 0.3s cubic-bezier(0.16,1,0.3,1)',
-                        }}
-                        whileTap={{ scale: 0.98 }}
-                        whileHover={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)', y: -2 }}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
-                            style={{ background: 'rgba(52,199,89,0.08)' }}
-                          >
-                            <CheckCircle2 className="w-4 h-4" style={{ color: '#34c759' }} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="truncate" style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1d1d1f', letterSpacing: '-0.01em' }}>
-                              {item.patientName}
-                            </p>
-                            <p className="truncate" style={{ fontSize: '0.75rem', color: '#aeaeb2', fontWeight: 500 }}>
-                              {item.medication}
-                            </p>
-                          </div>
-                          <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ color: '#aeaeb2' }} />
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </div>
-
-            {/* ─── Right: Intelligence Sidebar ─── */}
-            <div className="space-y-6">
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.15, ease }}
-              >
-                <div
-                  style={{
-                    background: '#ffffff',
-                    borderRadius: '20px',
-                    border: '0.5px solid rgba(0,0,0,0.06)',
-                    boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-                    overflow: 'hidden',
-                  }}
-                >
-                  <div
-                    className="flex items-center gap-2"
-                    style={{ padding: '16px 20px', borderBottom: '0.5px solid rgba(0,0,0,0.04)' }}
-                  >
-                    <div
-                      className="w-6 h-6 rounded-lg flex items-center justify-center"
-                      style={{ background: 'linear-gradient(135deg, rgba(175,82,222,0.12), rgba(0,122,255,0.12))' }}
-                    >
-                      <Sparkles className="w-3.5 h-3.5" style={{ color: '#af52de' }} />
-                    </div>
-                    <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1d1d1f', letterSpacing: '-0.015em' }}>
-                      AI Insight
-                    </span>
-                  </div>
-                  <div style={{ padding: '16px 20px' }}>
-                    <p style={{ fontSize: '0.875rem', color: '#6e6e73', lineHeight: 1.65, letterSpacing: '-0.006em' }}>
-                      {aiInsight}
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.22, ease }}
-              >
-                <div
-                  style={{
-                    background: '#ffffff',
-                    borderRadius: '20px',
-                    border: '0.5px solid rgba(0,0,0,0.06)',
-                    boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-                    overflow: 'hidden',
-                  }}
-                >
-                  <div
-                    className="flex items-center gap-2"
-                    style={{ padding: '16px 20px', borderBottom: '0.5px solid rgba(0,0,0,0.04)' }}
-                  >
-                    <Zap className="w-4 h-4" style={{ color: '#86868b' }} />
-                    <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1d1d1f', letterSpacing: '-0.015em' }}>
-                      Recent Activity
-                    </span>
-                  </div>
-                  <div style={{ padding: '8px 12px' }}>
-                    {aiActivity.length === 0 ? (
-                      <p style={{ fontSize: '0.875rem', color: '#aeaeb2', textAlign: 'center', padding: '20px 0' }}>
-                        No recent activity
-                      </p>
-                    ) : (
-                      aiActivity.slice(0, 5).map((activity) => (
-                        <button
-                          key={activity.id}
-                          type="button"
-                          onClick={() => activity.caseId && navigate(`/cases/${activity.caseId}`)}
-                          className="w-full flex items-start gap-3 text-left rounded-xl transition-colors duration-150 hover:bg-black/[0.02]"
-                          style={{ padding: '10px 8px' }}
-                        >
-                          <div
-                            className="flex-shrink-0 rounded-full mt-[7px]"
-                            style={{
-                              width: '7px',
-                              height: '7px',
-                              background: activity.status === 'success' ? '#34c759' : activity.status === 'pending' ? '#ff9500' : '#aeaeb2',
-                            }}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="truncate" style={{ fontSize: '0.8125rem', color: '#1d1d1f', fontWeight: 500 }}>
-                              {activity.action}
-                            </p>
-                            <p style={{ fontSize: '0.6875rem', color: '#aeaeb2', marginTop: '2px' }}>
-                              {new Date(activity.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </p>
-                          </div>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.3, ease }}
-              >
-                <div
-                  style={{
-                    background: '#ffffff',
-                    borderRadius: '20px',
-                    border: '0.5px solid rgba(0,0,0,0.06)',
-                    boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-                    overflow: 'hidden',
-                  }}
-                >
-                  <div style={{ padding: '16px 20px', borderBottom: '0.5px solid rgba(0,0,0,0.04)' }}>
-                    <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1d1d1f', letterSpacing: '-0.015em' }}>
-                      Quick Actions
-                    </span>
-                  </div>
-                  <div style={{ padding: '6px 8px' }}>
-                    <QuickAction
-                      icon={<FileText className="w-[15px] h-[15px]" />}
-                      label="View All Cases"
-                      onClick={() => navigate('/cases')}
-                    />
-                    <QuickAction
-                      icon={<BookOpen className="w-[15px] h-[15px]" />}
-                      label="Policy Library"
-                      onClick={() => navigate('/policies')}
-                    />
-                    <QuickAction
-                      icon={<Settings className="w-[15px] h-[15px]" />}
-                      label="Settings"
-                      onClick={() => navigate('/settings')}
-                    />
-                  </div>
-                </div>
-              </motion.div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function StatTile({ label, value, icon, accent }: { label: string; value: string | number; icon: React.ReactNode; accent?: string }) {
-  return (
-    <div
-      style={{
-        background: '#f5f5f7',
-        borderRadius: '16px',
-        padding: '20px',
-        border: '0.5px solid rgba(0,0,0,0.04)',
-      }}
-    >
-      <div className="flex items-center gap-2 mb-3">
-        <div
-          className="w-7 h-7 rounded-lg flex items-center justify-center"
-          style={{ background: accent ? `${accent}14` : 'rgba(0,0,0,0.04)', color: accent || '#86868b' }}
-        >
-          {icon}
-        </div>
-      </div>
-      <div
+    <div className="min-h-screen" style={{ background: '#fff' }}>
+      {/* ── Hero ── */}
+      <motion.section
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.8, ease }}
         style={{
-          fontSize: 'clamp(1.5rem, 3vw, 2rem)',
-          fontWeight: 700,
-          color: '#1d1d1f',
-          letterSpacing: '-0.035em',
-          lineHeight: 1,
-          fontVariantNumeric: 'tabular-nums',
+          background: 'linear-gradient(180deg, #fbfbfd 0%, #f5f5f7 100%)',
+          paddingBottom: hasCases ? '0' : undefined,
         }}
       >
-        {value}
-      </div>
-      <div style={{ fontSize: '0.75rem', color: '#86868b', marginTop: '6px', letterSpacing: '-0.003em', fontWeight: 500 }}>
-        {label}
-      </div>
-    </div>
-  )
-}
-
-function SectionHeader({ icon, title, count, action }: { icon: React.ReactNode; title: string; count?: number; action?: { label: string; onClick: () => void } }) {
-  return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2.5">
-        {icon}
-        <span style={{ fontSize: '0.9375rem', fontWeight: 600, color: '#1d1d1f', letterSpacing: '-0.015em' }}>
-          {title}
-        </span>
-        {count !== undefined && (
-          <span
-            className="flex items-center justify-center"
-            style={{
-              minWidth: '22px',
-              height: '22px',
-              padding: '0 6px',
-              borderRadius: '7px',
-              background: 'rgba(0,0,0,0.05)',
-              fontSize: '0.6875rem',
-              fontWeight: 600,
-              color: '#6e6e73',
-              fontVariantNumeric: 'tabular-nums',
-            }}
+        <div className="max-w-[980px] mx-auto px-6" style={{ paddingTop: '56px', paddingBottom: hasCases ? '48px' : '0' }}>
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.1, ease }}
+            className="text-center"
           >
-            {count}
-          </span>
-        )}
-      </div>
-      {action && (
-        <button
-          onClick={action.onClick}
-          className="flex items-center gap-1 transition-colors duration-200 hover:opacity-70"
-          style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#007aff', border: 'none', background: 'none', cursor: 'pointer' }}
+            <h1 style={{
+              fontSize: 'clamp(2.5rem, 5vw, 3.5rem)',
+              fontWeight: 700,
+              color: '#1d1d1f',
+              letterSpacing: '-0.04em',
+              lineHeight: 1.07,
+            }}>
+              {getGreeting()}.
+            </h1>
+            <p style={{
+              fontSize: 'clamp(1rem, 2vw, 1.3125rem)',
+              color: '#86868b',
+              marginTop: '12px',
+              letterSpacing: '-0.016em',
+              lineHeight: 1.4,
+              fontWeight: 400,
+            }}>
+              {hasCases
+                ? `${stats.totalCases} case${stats.totalCases !== 1 ? 's' : ''} in your workspace`
+                : 'Your access strategy workspace'}
+            </p>
+          </motion.div>
+
+          {hasCases && (
+            <motion.div
+              className="flex items-center justify-center gap-10 sm:gap-16"
+              style={{ marginTop: '44px' }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.25, ease }}
+            >
+              <StatMetric value={stats.totalCases} label="Cases" />
+              <div style={{ width: '1px', height: '40px', background: 'rgba(0,0,0,0.08)' }} />
+              <StatMetric value={stats.completedToday} label="Approved Today" accent="#34c759" />
+              <div style={{ width: '1px', height: '40px', background: 'rgba(0,0,0,0.08)' }} />
+              <StatMetric value={`${stats.avgProcessingDays.toFixed(1)}d`} label="Avg Time" accent="#ff9500" />
+              <div style={{ width: '1px', height: '40px', background: 'rgba(0,0,0,0.08)' }} />
+              <StatMetric value={`${stats.successRate.toFixed(0)}%`} label="Success" accent="#007aff" />
+            </motion.div>
+          )}
+
+          {!hasCases && (
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.25, ease }}
+              className="text-center"
+              style={{ paddingTop: '60px', paddingBottom: '80px' }}
+            >
+              <div
+                className="mx-auto mb-8"
+                style={{
+                  width: '80px',
+                  height: '80px',
+                  borderRadius: '24px',
+                  background: 'linear-gradient(145deg, #1d1d1f 0%, #3a3a3c 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 12px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.08)',
+                }}
+              >
+                <Brain className="w-9 h-9 text-white" style={{ opacity: 0.95 }} />
+              </div>
+
+              <h2 style={{
+                fontSize: 'clamp(1.5rem, 3.5vw, 2.25rem)',
+                fontWeight: 700,
+                color: '#1d1d1f',
+                letterSpacing: '-0.035em',
+                lineHeight: 1.1,
+              }}>
+                Ready when you are.
+              </h2>
+              <p style={{
+                fontSize: 'clamp(0.9375rem, 2vw, 1.125rem)',
+                color: '#86868b',
+                marginTop: '12px',
+                maxWidth: '440px',
+                marginLeft: 'auto',
+                marginRight: 'auto',
+                lineHeight: 1.55,
+                letterSpacing: '-0.01em',
+              }}>
+                Create your first case and let AI navigate policy analysis, benefit verification, and access strategy.
+              </p>
+
+              <motion.button
+                onClick={() => navigate('/cases/new')}
+                className="inline-flex items-center gap-2"
+                style={{
+                  marginTop: '36px',
+                  padding: '16px 32px',
+                  background: '#0071e3',
+                  color: '#ffffff',
+                  borderRadius: '980px',
+                  fontSize: '1.0625rem',
+                  fontWeight: 400,
+                  letterSpacing: '-0.01em',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+                whileHover={{ background: '#0077ED', transform: 'scale(1.02)' }}
+                whileTap={{ transform: 'scale(0.98)' }}
+              >
+                Get Started
+                <ArrowRight className="w-4 h-4" />
+              </motion.button>
+              <div className="flex items-center justify-center gap-2 mt-4">
+                <button
+                  onClick={() => navigate('/cases/new')}
+                  className="flex items-center gap-1"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#0071e3',
+                    fontSize: '1.0625rem',
+                    fontWeight: 400,
+                    cursor: 'pointer',
+                    letterSpacing: '-0.01em',
+                  }}
+                >
+                  Create a case
+                  <ArrowRight className="w-3.5 h-3.5" style={{ marginTop: '1px' }} />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </div>
+      </motion.section>
+
+      {!hasCases && (
+        <motion.section
+          initial={{ opacity: 0, y: 40 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.45, ease }}
+          style={{ background: '#fff' }}
         >
-          {action.label}
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
+          <div className="max-w-[980px] mx-auto px-6" style={{ paddingTop: '80px', paddingBottom: '100px' }}>
+            <div className="text-center mb-12">
+              <h3 style={{
+                fontSize: 'clamp(1.5rem, 3vw, 2rem)',
+                fontWeight: 700,
+                color: '#1d1d1f',
+                letterSpacing: '-0.03em',
+              }}>
+                Built for the way access actually works.
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-0" style={{ borderTop: '0.5px solid rgba(0,0,0,0.08)' }}>
+              {[
+                {
+                  icon: <Brain className="w-7 h-7" />,
+                  title: 'Policy Intelligence',
+                  desc: 'AI analyzes coverage criteria and matches clinical documentation to payer requirements automatically.',
+                },
+                {
+                  icon: <Activity className="w-7 h-7" />,
+                  title: 'Strategy Engine',
+                  desc: 'Generates optimal access pathways based on payer patterns, medication, and clinical data.',
+                },
+                {
+                  icon: <Sparkles className="w-7 h-7" />,
+                  title: 'Adaptive Workflow',
+                  desc: 'Orchestrates benefit verification, prior auth, and appeals — adjusting in real time.',
+                },
+              ].map((feature, i) => (
+                <div
+                  key={feature.title}
+                  style={{
+                    padding: '40px 32px',
+                    borderBottom: '0.5px solid rgba(0,0,0,0.08)',
+                    borderRight: i < 2 ? '0.5px solid rgba(0,0,0,0.08)' : 'none',
+                  }}
+                >
+                  <div style={{ color: '#1d1d1f', marginBottom: '16px' }}>
+                    {feature.icon}
+                  </div>
+                  <h4 style={{
+                    fontSize: '1.0625rem',
+                    fontWeight: 600,
+                    color: '#1d1d1f',
+                    letterSpacing: '-0.02em',
+                    marginBottom: '8px',
+                  }}>
+                    {feature.title}
+                  </h4>
+                  <p style={{
+                    fontSize: '0.9375rem',
+                    color: '#86868b',
+                    lineHeight: 1.58,
+                    letterSpacing: '-0.008em',
+                  }}>
+                    {feature.desc}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </motion.section>
+      )}
+
+      {/* ── Case Queue (when cases exist) ── */}
+      {hasCases && (
+        <section style={{ background: '#fff' }}>
+          <div className="max-w-[980px] mx-auto px-6" style={{ paddingTop: '8px', paddingBottom: '80px' }}>
+            <div className="flex items-center justify-between mb-1" style={{ padding: '16px 0' }}>
+              <motion.button
+                onClick={() => navigate('/cases/new')}
+                className="inline-flex items-center gap-2"
+                style={{
+                  padding: '10px 20px',
+                  background: '#0071e3',
+                  color: '#ffffff',
+                  borderRadius: '980px',
+                  fontSize: '0.875rem',
+                  fontWeight: 400,
+                  letterSpacing: '-0.008em',
+                  border: 'none',
+                  cursor: 'pointer',
+                  marginLeft: 'auto',
+                }}
+                whileHover={{ background: '#0077ED' }}
+                whileTap={{ scale: 0.97 }}
+              >
+                <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+                New Case
+              </motion.button>
+            </div>
+
+            {/* ── AI Insight Banner ── */}
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3, ease }}
+              style={{
+                padding: '20px 24px',
+                background: '#f5f5f7',
+                borderRadius: '16px',
+                marginBottom: '40px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '14px',
+              }}
+            >
+              <div
+                className="flex-shrink-0 flex items-center justify-center"
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '10px',
+                  background: 'linear-gradient(135deg, rgba(175,82,222,0.15), rgba(0,122,255,0.12))',
+                }}
+              >
+                <Sparkles className="w-4 h-4" style={{ color: '#af52de' }} />
+              </div>
+              <div>
+                <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#1d1d1f', letterSpacing: '-0.01em', marginBottom: '2px' }}>
+                  Intelligence
+                </p>
+                <p style={{ fontSize: '0.875rem', color: '#6e6e73', lineHeight: 1.5, letterSpacing: '-0.006em' }}>
+                  {aiInsight}
+                </p>
+              </div>
+            </motion.div>
+
+            {/* ── Needs Attention ── */}
+            {needsAttention.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.35, ease }}
+                style={{ marginBottom: '48px' }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="w-4 h-4" style={{ color: '#ff3b30' }} strokeWidth={2.2} />
+                  <span style={{ fontSize: '1.3125rem', fontWeight: 700, color: '#1d1d1f', letterSpacing: '-0.025em' }}>
+                    Needs Attention
+                  </span>
+                  <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#86868b', marginLeft: '4px' }}>
+                    {needsAttention.length}
+                  </span>
+                </div>
+                <div style={{ borderTop: '0.5px solid rgba(0,0,0,0.08)' }}>
+                  {needsAttention.slice(0, 5).map((item) => (
+                    <CaseQueueCard
+                      key={item.caseId}
+                      item={item}
+                      onProcess={(id) => navigate(`/cases/${id}`)}
+                      variant="compact"
+                    />
+                  ))}
+                </div>
+                {needsAttention.length > 5 && (
+                  <LinkButton onClick={() => navigate('/cases')} label={`View all ${needsAttention.length} cases`} />
+                )}
+              </motion.div>
+            )}
+
+            {needsAttention.length === 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.35, ease }}
+                className="flex items-center gap-3"
+                style={{
+                  marginBottom: '48px',
+                  padding: '20px 0',
+                  borderTop: '0.5px solid rgba(0,0,0,0.08)',
+                  borderBottom: '0.5px solid rgba(0,0,0,0.08)',
+                }}
+              >
+                <CheckCircle2 className="w-5 h-5" style={{ color: '#34c759' }} />
+                <span style={{ fontSize: '1.0625rem', fontWeight: 600, color: '#1d1d1f', letterSpacing: '-0.02em' }}>
+                  All caught up.
+                </span>
+                <span style={{ fontSize: '0.9375rem', color: '#86868b', letterSpacing: '-0.008em' }}>
+                  No cases need your attention right now.
+                </span>
+              </motion.div>
+            )}
+
+            {/* ── In Progress ── */}
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.4, ease }}
+              style={{ marginBottom: '48px' }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4" style={{ color: '#ff9500' }} strokeWidth={2.2} />
+                  <span style={{ fontSize: '1.3125rem', fontWeight: 700, color: '#1d1d1f', letterSpacing: '-0.025em' }}>
+                    In Progress
+                  </span>
+                  <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#86868b', marginLeft: '4px' }}>
+                    {inProgress.length}
+                  </span>
+                </div>
+                {inProgress.length > 0 && (
+                  <LinkButton onClick={() => navigate('/cases')} label="View All" />
+                )}
+              </div>
+              <div style={{ borderTop: '0.5px solid rgba(0,0,0,0.08)' }}>
+                {inProgress.length === 0 ? (
+                  <p style={{ fontSize: '0.9375rem', color: '#86868b', padding: '24px 0', letterSpacing: '-0.008em' }}>
+                    No cases in progress.
+                  </p>
+                ) : (
+                  inProgress.slice(0, 5).map((item) => (
+                    <CaseQueueCard
+                      key={item.caseId}
+                      item={item}
+                      onProcess={(id) => navigate(`/cases/${id}`)}
+                      variant="compact"
+                    />
+                  ))
+                )}
+              </div>
+              {inProgress.length > 5 && (
+                <LinkButton onClick={() => navigate('/cases')} label={`View all ${inProgress.length} in-progress cases`} />
+              )}
+            </motion.div>
+
+            {/* ── Completed ── */}
+            {completed.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.45, ease }}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4" style={{ color: '#34c759' }} strokeWidth={2.2} />
+                    <span style={{ fontSize: '1.3125rem', fontWeight: 700, color: '#1d1d1f', letterSpacing: '-0.025em' }}>
+                      Completed
+                    </span>
+                    <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#86868b', marginLeft: '4px' }}>
+                      {completed.length}
+                    </span>
+                  </div>
+                  <LinkButton onClick={() => navigate('/cases')} label="View All" />
+                </div>
+                <div style={{ borderTop: '0.5px solid rgba(0,0,0,0.08)' }}>
+                  {completed.slice(0, 4).map((item) => (
+                    <button
+                      key={item.caseId}
+                      onClick={() => navigate(`/cases/${item.caseId}`)}
+                      className="w-full flex items-center gap-4 text-left group transition-colors duration-200 hover:bg-black/[0.015]"
+                      style={{
+                        padding: '16px 4px',
+                        borderBottom: '0.5px solid rgba(0,0,0,0.06)',
+                        background: 'none',
+                        border: 'none',
+                        borderBottomWidth: '0.5px',
+                        borderBottomStyle: 'solid',
+                        borderBottomColor: 'rgba(0,0,0,0.06)',
+                        cursor: 'pointer',
+                        width: '100%',
+                      }}
+                    >
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                        style={{ background: 'rgba(52,199,89,0.08)' }}
+                      >
+                        <CheckCircle2 className="w-4 h-4" style={{ color: '#34c759' }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="truncate block" style={{ fontSize: '0.9375rem', fontWeight: 600, color: '#1d1d1f', letterSpacing: '-0.01em' }}>
+                          {item.patientName}
+                        </span>
+                        <span className="truncate block" style={{ fontSize: '0.8125rem', color: '#86868b', marginTop: '1px' }}>
+                          {item.medication}
+                        </span>
+                      </div>
+                      <ArrowRight className="w-4 h-4 flex-shrink-0 transition-all duration-200 opacity-0 group-hover:opacity-60 group-hover:translate-x-0.5" style={{ color: '#86868b' }} />
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {/* ── Recent Activity ── */}
+            {aiActivity.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.5, ease }}
+                style={{ marginTop: '48px' }}
+              >
+                <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#86868b', letterSpacing: '-0.003em', textTransform: 'uppercase' as const }}>
+                  Recent Activity
+                </span>
+                <div style={{ marginTop: '12px', borderTop: '0.5px solid rgba(0,0,0,0.08)' }}>
+                  {aiActivity.slice(0, 4).map((activity) => (
+                    <button
+                      key={activity.id}
+                      type="button"
+                      onClick={() => activity.caseId && navigate(`/cases/${activity.caseId}`)}
+                      className="w-full flex items-center gap-3 text-left transition-colors duration-150 hover:bg-black/[0.015]"
+                      style={{
+                        padding: '14px 4px',
+                        borderBottom: '0.5px solid rgba(0,0,0,0.06)',
+                        background: 'none',
+                        border: 'none',
+                        borderBottomWidth: '0.5px',
+                        borderBottomStyle: 'solid',
+                        borderBottomColor: 'rgba(0,0,0,0.06)',
+                        cursor: 'pointer',
+                        width: '100%',
+                      }}
+                    >
+                      <div
+                        className="flex-shrink-0 rounded-full"
+                        style={{
+                          width: '8px',
+                          height: '8px',
+                          background: activity.status === 'success' ? '#34c759' : activity.status === 'pending' ? '#ff9500' : '#d1d1d6',
+                        }}
+                      />
+                      <span className="flex-1 truncate" style={{ fontSize: '0.9375rem', color: '#1d1d1f', fontWeight: 500, letterSpacing: '-0.008em' }}>
+                        {activity.action}
+                      </span>
+                      <span style={{ fontSize: '0.8125rem', color: '#aeaeb2', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                        {new Date(activity.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </div>
+        </section>
       )}
     </div>
   )
 }
 
-function ViewMoreButton({ onClick, count, label = 'more' }: { onClick: () => void; count: number; label?: string }) {
+function StatMetric({ value, label, accent }: { value: string | number; label: string; accent?: string }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full transition-colors duration-200 hover:bg-black/[0.02] rounded-xl"
-      style={{ padding: '12px', fontSize: '0.8125rem', fontWeight: 500, color: '#007aff', border: 'none', background: 'none', cursor: 'pointer' }}
-    >
-      +{count} {label}
-    </button>
-  )
-}
-
-function QuickAction({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
-  return (
-    <button
-      className="w-full flex items-center gap-3 rounded-xl group transition-colors duration-150 hover:bg-black/[0.02]"
-      style={{ padding: '12px', border: 'none', background: 'none', cursor: 'pointer' }}
-      onClick={onClick}
-    >
-      <span style={{ color: '#aeaeb2' }}>{icon}</span>
-      <span className="flex-1 text-left" style={{ fontSize: '0.875rem', color: '#1d1d1f', fontWeight: 500, letterSpacing: '-0.01em' }}>
-        {label}
-      </span>
-      <ArrowRight className="w-3.5 h-3.5 transition-all duration-200 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5" style={{ color: '#d1d1d6' }} />
-    </button>
-  )
-}
-
-function EmptyState({ onCreateCase }: { onCreateCase: () => void }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.7, ease }}
-    >
-      <div
-        className="text-center"
-        style={{
-          background: '#ffffff',
-          borderRadius: '24px',
-          padding: '80px 40px',
-          border: '0.5px solid rgba(0,0,0,0.06)',
-          boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-        }}
-      >
-        <div
-          className="mx-auto mb-6 flex items-center justify-center"
-          style={{
-            width: '72px',
-            height: '72px',
-            borderRadius: '22px',
-            background: 'linear-gradient(135deg, #1d1d1f 0%, #48484a 100%)',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
-          }}
-        >
-          <Brain className="w-8 h-8 text-white" />
-        </div>
-        <h3 style={{
-          fontSize: 'clamp(1.25rem, 3vw, 1.75rem)',
-          fontWeight: 700,
-          color: '#1d1d1f',
-          letterSpacing: '-0.03em',
-          marginBottom: '8px',
-        }}>
-          Ready to process cases.
-        </h3>
-        <p style={{
-          fontSize: '1rem',
-          color: '#86868b',
-          maxWidth: '420px',
-          margin: '0 auto 32px',
-          lineHeight: 1.6,
-          letterSpacing: '-0.01em',
-        }}>
-          Create your first case and let AI assist with policy analysis and access strategy.
-        </p>
-        <motion.button
-          onClick={onCreateCase}
-          className="inline-flex items-center gap-2"
-          style={{
-            padding: '14px 28px',
-            background: '#1d1d1f',
-            color: '#ffffff',
-            borderRadius: '980px',
-            fontSize: '0.9375rem',
-            fontWeight: 600,
-            letterSpacing: '-0.01em',
-            border: 'none',
-            cursor: 'pointer',
-          }}
-          whileHover={{ scale: 1.02, boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}
-          whileTap={{ scale: 0.97 }}
-        >
-          <Plus className="w-4 h-4" strokeWidth={2.5} />
-          Create First Case
-        </motion.button>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-12 max-w-[560px] mx-auto">
-          {[
-            { icon: <Brain className="w-5 h-5" />, title: 'AI Policy Analysis', desc: 'Automated clinical matching' },
-            { icon: <Zap className="w-5 h-5" />, title: 'Strategy Engine', desc: 'Optimal access pathways' },
-            { icon: <Activity className="w-5 h-5" />, title: 'Real-time Tracking', desc: 'End-to-end monitoring' },
-          ].map((feature) => (
-            <div key={feature.title} style={{ textAlign: 'center' }}>
-              <div
-                className="mx-auto mb-2 flex items-center justify-center"
-                style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(0,0,0,0.03)', color: '#86868b' }}
-              >
-                {feature.icon}
-              </div>
-              <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#1d1d1f', letterSpacing: '-0.01em' }}>
-                {feature.title}
-              </p>
-              <p style={{ fontSize: '0.75rem', color: '#aeaeb2', marginTop: '2px' }}>
-                {feature.desc}
-              </p>
-            </div>
-          ))}
-        </div>
+    <div className="text-center">
+      <div style={{
+        fontSize: 'clamp(1.75rem, 3.5vw, 2.5rem)',
+        fontWeight: 700,
+        color: accent || '#1d1d1f',
+        letterSpacing: '-0.04em',
+        lineHeight: 1,
+        fontVariantNumeric: 'tabular-nums',
+      }}>
+        {value}
       </div>
-    </motion.div>
+      <div style={{
+        fontSize: '0.75rem',
+        color: '#86868b',
+        marginTop: '6px',
+        letterSpacing: '-0.003em',
+        fontWeight: 500,
+      }}>
+        {label}
+      </div>
+    </div>
+  )
+}
+
+function LinkButton({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1 transition-colors duration-200 hover:underline"
+      style={{
+        fontSize: '0.9375rem',
+        fontWeight: 400,
+        color: '#0071e3',
+        border: 'none',
+        background: 'none',
+        cursor: 'pointer',
+        letterSpacing: '-0.008em',
+      }}
+    >
+      {label}
+      <ArrowRight className="w-3.5 h-3.5" style={{ marginTop: '1px' }} />
+    </button>
   )
 }
 
 function LoadingSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[1, 2, 3, 4].map((i) => (
-          <div
-            key={i}
-            className="animate-pulse"
-            style={{ height: '100px', borderRadius: '16px', background: 'rgba(0,0,0,0.03)' }}
-          />
-        ))}
+    <div className="min-h-screen" style={{ background: '#fff' }}>
+      <div className="max-w-[980px] mx-auto px-6" style={{ paddingTop: '80px' }}>
+        <div className="text-center">
+          <div className="animate-pulse mx-auto" style={{ width: '260px', height: '48px', borderRadius: '12px', background: '#f5f5f7' }} />
+          <div className="animate-pulse mx-auto mt-4" style={{ width: '200px', height: '24px', borderRadius: '8px', background: '#f5f5f7' }} />
+        </div>
+        <div className="animate-pulse mt-16" style={{ height: '200px', borderRadius: '12px', background: '#f5f5f7' }} />
       </div>
-      <div
-        className="animate-pulse"
-        style={{ height: '200px', borderRadius: '20px', background: '#ffffff', border: '0.5px solid rgba(0,0,0,0.06)' }}
-      />
     </div>
   )
 }
 
 function ErrorState() {
   return (
-    <div
-      className="text-center"
-      style={{
-        padding: '60px 40px',
-        background: '#ffffff',
-        borderRadius: '24px',
-        border: '0.5px solid rgba(0,0,0,0.06)',
-      }}
-    >
-      <p style={{ fontSize: '0.9375rem', color: '#aeaeb2', marginBottom: '20px' }}>Something went wrong loading your cases.</p>
-      <button
-        onClick={() => window.location.reload()}
-        className="transition-all duration-200 hover:bg-black/[0.08]"
-        style={{
-          padding: '10px 20px',
-          background: 'rgba(0,0,0,0.04)',
-          borderRadius: '980px',
-          fontSize: '0.875rem',
-          fontWeight: 500,
-          color: '#1d1d1f',
-          border: 'none',
-          cursor: 'pointer',
-        }}
-      >
-        Try Again
-      </button>
+    <div className="min-h-screen flex items-center justify-center" style={{ background: '#fff' }}>
+      <div className="text-center">
+        <p style={{ fontSize: '1.125rem', fontWeight: 600, color: '#1d1d1f', letterSpacing: '-0.02em' }}>
+          Something went wrong.
+        </p>
+        <p style={{ fontSize: '0.9375rem', color: '#86868b', marginTop: '8px', letterSpacing: '-0.008em' }}>
+          We couldn't load your cases. Please try again.
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="inline-flex items-center gap-1 mt-6"
+          style={{
+            padding: '10px 20px',
+            background: '#0071e3',
+            color: '#ffffff',
+            borderRadius: '980px',
+            fontSize: '0.875rem',
+            fontWeight: 400,
+            border: 'none',
+            cursor: 'pointer',
+          }}
+        >
+          Try Again
+        </button>
+      </div>
     </div>
   )
 }
