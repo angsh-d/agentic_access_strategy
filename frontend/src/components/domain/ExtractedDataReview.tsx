@@ -8,6 +8,7 @@
  */
 
 import { useState, useMemo } from 'react'
+import { PdfViewer } from '@/components/ui/PdfViewer'
 import { useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -563,11 +564,9 @@ export function ExtractedDataReview({
               </div>
             </div>
             <div className="flex-1 bg-grey-800 m-2 rounded-lg overflow-hidden">
-              <iframe
+              <PdfViewer
                 key={`${pdfViewerDoc}-${isDocViewerMaximized}`}
-                src={`/api/v1/patients/${patientData.patient_id}/documents/${pdfViewerDoc}#zoom=${isDocViewerMaximized ? '75' : 'page-width'}`}
-                className="w-full h-full"
-                title="Document Viewer"
+                url={`/api/v1/patients/${patientData.patient_id}/documents/${pdfViewerDoc}`}
               />
             </div>
           </motion.div>
