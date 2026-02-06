@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useIsRestoring } from '@tanstack/react-query'
 import { MainLayout } from './components/layout/MainLayout'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import Landing from './pages/Landing'
 import Dashboard from './pages/Dashboard'
 import CaseDetail from './pages/CaseDetail'
 import NewCase from './pages/NewCase'
@@ -10,19 +11,24 @@ import Settings from './pages/Settings'
 import Policies from './pages/Policies'
 import { pageTransition } from './lib/animations'
 
-/**
- * Animated Routes wrapper for page transitions
- */
 function AnimatedRoutes() {
   const location = useLocation()
 
   return (
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
+        <Route
+          path="/"
+          element={
+            <PageWrapper>
+              <Landing />
+            </PageWrapper>
+          }
+        />
+
         <Route element={<MainLayout />}>
-          {/* Dashboard / Home */}
           <Route
-            path="/"
+            path="/dashboard"
             element={
               <PageWrapper>
                 <Dashboard />
@@ -30,7 +36,6 @@ function AnimatedRoutes() {
             }
           />
 
-          {/* Cases */}
           <Route
             path="/cases"
             element={
@@ -56,7 +61,6 @@ function AnimatedRoutes() {
             }
           />
 
-          {/* Policies - Full policy library */}
           <Route
             path="/policies"
             element={
@@ -66,7 +70,6 @@ function AnimatedRoutes() {
             }
           />
 
-          {/* Settings */}
           <Route
             path="/settings"
             element={
@@ -75,18 +78,14 @@ function AnimatedRoutes() {
               </PageWrapper>
             }
           />
-
-          {/* Catch-all redirect */}
-          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
+
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AnimatePresence>
   )
 }
 
-/**
- * Page wrapper for animation transitions
- */
 function PageWrapper({ children }: { children: React.ReactNode }) {
   return (
     <motion.div
@@ -100,9 +99,6 @@ function PageWrapper({ children }: { children: React.ReactNode }) {
   )
 }
 
-/**
- * Loading state shown while cache is being restored from IndexedDB
- */
 function CacheRestoringFallback() {
   return (
     <div className="min-h-screen bg-grey-50 flex items-center justify-center">
@@ -114,13 +110,9 @@ function CacheRestoringFallback() {
   )
 }
 
-/**
- * App content wrapper that waits for cache restoration
- */
 function AppContent() {
   const isRestoring = useIsRestoring()
 
-  // Show loading state while cache is being restored from IndexedDB
   if (isRestoring) {
     return <CacheRestoringFallback />
   }

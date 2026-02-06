@@ -16,7 +16,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { path: '/', label: 'Dashboard', icon: <LayoutGrid className="w-[18px] h-[18px]" /> },
+  { path: '/dashboard', label: 'Dashboard', icon: <LayoutGrid className="w-[18px] h-[18px]" /> },
   { path: '/cases', label: 'Cases', icon: <FolderOpen className="w-[18px] h-[18px]" /> },
   { path: '/policies', label: 'Policies', icon: <FileText className="w-[18px] h-[18px]" /> },
   { path: '/settings', label: 'Settings', icon: <Settings className="w-[18px] h-[18px]" /> },
@@ -67,8 +67,8 @@ export function Sidebar() {
       <nav className="flex-1 px-3 py-1">
         <div className="space-y-0.5">
           {navItems.map((item) => {
-            const isActive = item.path === '/'
-              ? location.pathname === '/'
+            const isActive = item.path === '/dashboard'
+              ? location.pathname === '/dashboard'
               : location.pathname.startsWith(item.path)
 
             return (

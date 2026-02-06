@@ -45,6 +45,9 @@ export default {
         '3xl':  ['1.875rem', { lineHeight: '2.25rem', letterSpacing: '-0.025em' }],
         '4xl':  ['2.25rem', { lineHeight: '2.5rem', letterSpacing: '-0.028em' }],
         '5xl':  ['3rem', { lineHeight: '1', letterSpacing: '-0.032em' }],
+        '6xl':  ['3.75rem', { lineHeight: '1', letterSpacing: '-0.035em' }],
+        '7xl':  ['4.5rem', { lineHeight: '1.05', letterSpacing: '-0.04em' }],
+        '8xl':  ['6rem', { lineHeight: '1', letterSpacing: '-0.04em' }],
       },
       borderRadius: {
         'lg': '10px',

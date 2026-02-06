@@ -45,6 +45,22 @@ Single workflow runs both backend and frontend:
 - Backend: `python -m uvicorn backend.main:app --host localhost --port 8000`
 - Frontend: `npm run dev` (Vite on port 5000)
 
+## Routing
+- `/` - Landing page (Apple-inspired hero, features, workflow, intelligence sections)
+- `/dashboard` - Main application dashboard
+- `/cases` - Case queue (same as dashboard)
+- `/cases/new` - New case creation
+- `/cases/:id` - Case detail view
+- `/policies` - Policy library
+- `/settings` - Settings
+
 ## Deployment
 - Build: `cd frontend && npm run build`
 - Run: Backend serves static frontend files from `frontend/dist/` when available
+
+## Design System
+- Apple-inspired design: SF Pro-style typography (Inter), greyscale palette, muted semantic colors
+- CSS custom properties for spacing, easing, and durations
+- Glass morphism components (glass-panel, glass-sidebar, glass-header)
+- Framer Motion for page transitions and scroll-triggered animations
+- Tailwind CSS with custom theme extending Apple's design language
