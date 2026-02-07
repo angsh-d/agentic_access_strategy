@@ -117,6 +117,17 @@
     letter-spacing: 0.06em;
   }
 
+  .cta-button-blue {
+    transition: background-color 0.2s ease, transform 0.15s ease;
+  }
+  .cta-button-blue:hover {
+    background-color: #0077ED !important;
+    background: #0077ED !important;
+  }
+  .cta-button-blue:active {
+    transform: scale(0.97);
+  }
+
   .text-success {
     @apply text-semantic-success;
   }

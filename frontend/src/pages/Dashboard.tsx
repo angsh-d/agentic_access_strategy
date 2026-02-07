@@ -291,9 +291,9 @@ export function Dashboard() {
                 Create your first case and let AI navigate policy analysis, benefit verification, and access strategy.
               </p>
 
-              <motion.button
+              <button
                 onClick={() => navigate('/cases/new')}
-                className="inline-flex items-center gap-2"
+                className="cta-button-blue inline-flex items-center gap-2"
                 style={{
                   marginTop: '36px',
                   padding: '16px 32px',
@@ -306,12 +306,10 @@ export function Dashboard() {
                   border: 'none',
                   cursor: 'pointer',
                 }}
-                whileHover={{ background: '#0077ED', transform: 'scale(1.02)' }}
-                whileTap={{ transform: 'scale(0.98)' }}
               >
                 Get Started
                 <ArrowRight className="w-4 h-4" />
-              </motion.button>
+              </button>
               <div className="flex items-center justify-center gap-2 mt-4">
                 <button
                   onClick={() => navigate('/cases/new')}
@@ -412,9 +410,9 @@ export function Dashboard() {
         <section style={{ background: '#fff' }}>
           <div className="max-w-[980px] mx-auto px-6" style={{ paddingTop: '8px', paddingBottom: '80px' }}>
             <div className="flex items-center justify-between mb-1" style={{ padding: '16px 0' }}>
-              <motion.button
+              <button
                 onClick={() => navigate('/cases/new')}
-                className="inline-flex items-center gap-2"
+                className="cta-button-blue inline-flex items-center gap-2"
                 style={{
                   padding: '10px 20px',
                   background: '#0071e3',
@@ -427,12 +425,10 @@ export function Dashboard() {
                   cursor: 'pointer',
                   marginLeft: 'auto',
                 }}
-                whileHover={{ background: '#0077ED' }}
-                whileTap={{ scale: 0.97 }}
               >
                 <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
                 New Case
-              </motion.button>
+              </button>
             </div>
 
             {/* ── AI Insight Banner ── */}
