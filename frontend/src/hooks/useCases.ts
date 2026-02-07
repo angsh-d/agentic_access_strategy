@@ -11,11 +11,11 @@ export function useCases(params?: PaginationParams) {
   return useQuery({
     queryKey: [...QUERY_KEYS.cases, params],
     queryFn: () => api.cases.list(params),
-    staleTime: CACHE_TIMES.DYNAMIC,
+    staleTime: CACHE_TIMES.REALTIME,
     gcTime: CACHE_TIMES.GC_TIME,
-    refetchOnMount: false,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchOnReconnect: true,
   })
 }
 

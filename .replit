@@ -26,17 +26,12 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && python -m uvicorn backend.main:app --host localhost --port 8000 & cd /home/runner/workspace/frontend && npm run dev"
+args = "cd /home/runner/workspace && python -m uvicorn backend.main:app --host localhost --port 8000 & sleep 2 && cd /home/runner/workspace/frontend && npx vite --host 0.0.0.0 --port 5000"
 waitForPort = 5000
 
 [[ports]]
 localPort = 5000
 externalPort = 80
-
-[[ports]]
-localPort = 8000
-externalPort = 8000
-exposeLocalhost = true
 
 [deployment]
 deploymentTarget = "autoscale"
