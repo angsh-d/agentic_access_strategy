@@ -26,28 +26,11 @@ export function Sidebar() {
   const location = useLocation()
 
   return (
-    <aside className="glass-sidebar fixed left-0 top-0 h-full w-64 flex flex-col z-40">
-      <div className="h-14 flex items-center px-5">
-        <div className="flex items-center gap-2.5">
-          <div className="w-[30px] h-[30px] rounded-[8px] bg-grey-900 flex items-center justify-center shadow-sm">
-            <svg
-              className="w-[16px] h-[16px] text-white"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2.2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-              />
-            </svg>
-          </div>
-          <span className="font-semibold text-[14px] text-grey-900 tracking-tight">
-            Access Strategy
-          </span>
-        </div>
+    <aside className="glass-sidebar fixed left-0 w-64 flex flex-col z-40" style={{ top: '48px', height: 'calc(100vh - 48px)' }}>
+      <div className="h-12 flex items-center px-5">
+        <span className="font-semibold text-[13px] text-grey-500 tracking-tight">
+          Navigation
+        </span>
       </div>
 
       <div className="px-3 pt-1 pb-3">

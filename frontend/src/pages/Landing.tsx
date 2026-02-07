@@ -19,19 +19,24 @@ function NavBar() {
       }}
     >
       <div className="max-w-[1024px] mx-auto flex items-center justify-between h-[44px] px-6">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-0">
+          <img
+            src="/saama_logo.svg"
+            alt="Saama"
+            style={{ height: '22px', width: 'auto' }}
+          />
           <div
-            className="w-[18px] h-[18px] rounded-[5px] flex items-center justify-center"
             style={{
-              background: 'linear-gradient(135deg, #1c1c1e 0%, #48484a 100%)',
+              width: '1px',
+              height: '18px',
+              background: 'rgba(0, 0, 0, 0.15)',
+              marginLeft: '14px',
+              marginRight: '14px',
+              flexShrink: 0,
             }}
-          >
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <path d="M5 1L9 5L5 9M1 5H9" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
-          <span className="text-sm font-semibold text-grey-900" style={{ letterSpacing: '-0.02em' }}>
-            Access Strategy
+          />
+          <span className="text-sm font-medium text-grey-900" style={{ letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
+            Patient Access Strategy
           </span>
         </div>
 
