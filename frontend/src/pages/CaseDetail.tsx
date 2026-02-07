@@ -1249,6 +1249,29 @@ function SubmitStep({
     }
   }, [isWaitingForRefresh, isMonitoring, hasSubmissions, hasError])
 
+  const handleManualSubmit = async () => {
+    setIsWaitingForRefresh(true)
+    setHasTimedOut(false)
+    timeoutRef.current = setTimeout(() => {
+      setHasTimedOut(true)
+      setIsWaitingForRefresh(false)
+    }, 30000)
+    try {
+      await onRunCoordination()
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
+    } catch (error) {
+      console.error('Submit failed:', error)
+      setIsWaitingForRefresh(false)
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
+    }
+  }
+
   // Auto-submit when reaching this step (if not already submitted/monitoring)
   useEffect(() => {
     if (
@@ -1261,36 +1284,10 @@ function SubmitStep({
       caseState.stage === 'action_coordination'
     ) {
       hasAutoSubmitted.current = true
-      setIsWaitingForRefresh(true)
-
-      // Set a timeout - if no response in 30 seconds, show timeout state
-      timeoutRef.current = setTimeout(() => {
-        setHasTimedOut(true)
-        setIsWaitingForRefresh(false)
-      }, 30000)
-
-      // Small delay to allow UI to render first, then execute submission
-      const timer = setTimeout(async () => {
-        try {
-          await onRunCoordination()
-          // Clear timeout on success - data refresh handled by parent
-          if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current)
-            timeoutRef.current = null
-          }
-        } catch (error) {
-          console.error('Auto-submit failed:', error)
-          // Error will be reflected via hasError prop from parent
-          setIsWaitingForRefresh(false)
-          if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current)
-            timeoutRef.current = null
-          }
-        }
-      }, 500)
-      return () => clearTimeout(timer)
+      handleManualSubmit()
     }
-  }, [isMonitoring, hasSubmissions, isProcessing, hasError, hasTimedOut, caseState.stage, onRunCoordination])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMonitoring, hasSubmissions, isProcessing, hasError, hasTimedOut, caseState.stage])
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -1411,13 +1408,25 @@ function SubmitStep({
             })}
           </div>
         </div>
-      ) : (
+      ) : isSubmitting ? (
         <div className="p-12 rounded-xl border border-grey-200 text-center bg-grey-50">
           <Loader2 className="w-12 h-12 text-grey-400 mx-auto mb-4 animate-spin" />
           <h3 className="text-lg font-semibold text-grey-700 mb-2">Submitting PA Requests</h3>
           <p className="text-sm text-grey-500 max-w-md mx-auto">
             Automatically submitting to payers using the selected strategy...
           </p>
+        </div>
+      ) : (
+        <div className="p-12 rounded-xl border border-grey-200 text-center bg-grey-50">
+          <Play className="w-12 h-12 text-grey-400 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-grey-700 mb-2">Ready to Submit</h3>
+          <p className="text-sm text-grey-500 max-w-md mx-auto mb-6">
+            Submit prior authorization requests to payers using the selected strategy.
+          </p>
+          <Button variant="primary" onClick={handleManualSubmit}>
+            <Play className="w-4 h-4 mr-2" />
+            Submit Now
+          </Button>
         </div>
       )}
     </WizardStep>
