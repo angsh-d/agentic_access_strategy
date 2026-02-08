@@ -101,8 +101,8 @@ function transformCaseData(caseState: CaseState, payerName: string): {
   const criteria: PolicyCriterion[] = []
   const evidence: PatientEvidence[] = []
 
-  // Check for structured criteria_details from AI analysis
-  const criteriaDetails = (assessment as any)?.criteria_details
+  // Check for structured criteria from AI analysis (backend uses criteria_assessments)
+  const criteriaDetails = (assessment as any)?.criteria_details ?? (assessment as any)?.criteria_assessments
 
   if (criteriaDetails && Array.isArray(criteriaDetails)) {
     // Use actual AI-analyzed criteria
@@ -115,7 +115,7 @@ function transformCaseData(caseState: CaseState, payerName: string): {
           atomicCriteria.push({
             id: `${idx}-${subIdx}`,
             text: sub.text || sub.requirement || sub,
-            status: sub.met === true ? 'satisfied' : sub.met === false ? 'gap' : sub.partial ? 'partial' : 'pending',
+            status: sub.met === true || sub.is_met === true ? 'satisfied' : sub.met === false || sub.is_met === false ? 'gap' : sub.partial ? 'partial' : 'pending',
             evidenceRef: sub.evidence_ref,
           })
         })
@@ -124,7 +124,7 @@ function transformCaseData(caseState: CaseState, payerName: string): {
         atomicCriteria.push({
           id: `${idx}-0`,
           text: detail.description || detail.criterion_name || `Requirement ${idx + 1}`,
-          status: detail.met === true ? 'satisfied' : detail.met === false ? 'gap' : detail.partial ? 'partial' : 'pending',
+          status: detail.met === true || detail.is_met === true ? 'satisfied' : detail.met === false || detail.is_met === false ? 'gap' : detail.partial ? 'partial' : 'pending',
           evidenceRef: detail.evidence_ref,
         })
       }
@@ -151,99 +151,19 @@ function transformCaseData(caseState: CaseState, payerName: string): {
       }
     })
   } else {
-    // Generate representative criteria structure based on common PA requirements
-    const categories = [
-      {
-        name: 'Diagnosis Requirements',
-        criteria: [
-          {
-            original: 'Patient must have documented diagnosis of the indicated condition with ICD-10 code verification',
-            atomic: [
-              { text: 'Primary diagnosis documented in medical record', status: 'satisfied' as const },
-              { text: 'ICD-10 code present and matches indication', status: caseState.patient.diagnosis_codes?.length ? 'satisfied' as const : 'gap' as const },
-            ]
-          }
-        ]
-      },
-      {
-        name: 'Step Therapy / Prior Treatment',
-        criteria: [
-          {
-            original: 'Patient must have tried and failed at least one conventional DMARD therapy unless contraindicated',
-            atomic: [
-              { text: 'Prior DMARD therapy attempted', status: 'partial' as const },
-              { text: 'Treatment failure or intolerance documented', status: 'partial' as const },
-              { text: 'Duration of prior therapy meets minimum requirement', status: 'pending' as const },
-            ]
-          }
-        ]
-      },
-      {
-        name: 'Safety Screenings',
-        criteria: [
-          {
-            original: 'Required safety screenings including TB test, Hepatitis panel, and baseline labs must be completed',
-            atomic: [
-              { text: 'TB screening (PPD or QuantiFERON) completed', status: 'gap' as const },
-              { text: 'Hepatitis B/C screening documented', status: 'gap' as const },
-              { text: 'Baseline CBC and metabolic panel obtained', status: 'satisfied' as const },
-            ]
-          }
-        ]
-      },
-      {
-        name: 'Prescriber Requirements',
-        criteria: [
-          {
-            original: 'Medication must be prescribed by or in consultation with a board-certified specialist',
-            atomic: [
-              { text: 'Prescribing physician identified', status: 'satisfied' as const },
-              { text: 'Specialty credentials verified (Rheumatology/GI)', status: 'satisfied' as const },
-            ]
-          }
-        ]
-      },
-    ]
-
-    categories.forEach((cat, catIdx) => {
-      cat.criteria.forEach((crit, critIdx) => {
-        criteria.push({
-          id: `crit-${catIdx}-${critIdx}`,
-          category: cat.name,
-          originalText: crit.original,
-          decomposed: crit.atomic.map((a, aIdx) => ({
-            id: `${catIdx}-${critIdx}-${aIdx}`,
-            text: a.text,
-            status: a.status,
-          })),
-        })
-      })
+    // No AI analysis available — show a single pending entry instead of fabricated criteria
+    criteria.push({
+      id: 'crit-pending',
+      category: 'Pending AI Analysis',
+      originalText: 'Policy criteria will be evaluated when AI analysis is initiated. Run coverage assessment to see per-criterion results.',
+      decomposed: [
+        {
+          id: 'pending-0',
+          text: 'Awaiting AI coverage assessment',
+          status: 'pending' as const,
+        },
+      ],
     })
-
-    // Generate evidence from patient data
-    if (caseState.patient) {
-      if (caseState.patient.diagnosis_codes?.length) {
-        evidence.push({
-          id: 'ev-diagnosis',
-          type: 'Diagnosis',
-          value: caseState.patient.diagnosis_codes.join(', '),
-          source: 'Patient Demographics',
-          linkedCriteria: ['crit-0-0'],
-          confidence: 0.95,
-        })
-      }
-    }
-
-    if (caseState.medication) {
-      evidence.push({
-        id: 'ev-prescriber',
-        type: 'Prescriber',
-        value: `${caseState.medication.prescriber_name}`,
-        source: 'Prescription',
-        linkedCriteria: ['crit-3-0'],
-        confidence: 0.98,
-      })
-    }
   }
 
   // Calculate summary

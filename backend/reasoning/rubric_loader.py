@@ -170,9 +170,20 @@ class RubricLoader:
 
         # Try payer-specific rubric first
         rubric_path = None
+        rubrics_root = self.rubrics_dir.resolve()
         if payer_name:
             payer_key = payer_name.lower().replace(" ", "_")
-            payer_path = self.rubrics_dir / f"{payer_key}_rubric.md"
+            payer_path = (self.rubrics_dir / f"{payer_key}_rubric.md").resolve()
+            # Path traversal protection
+            try:
+                payer_path.relative_to(rubrics_root)
+            except ValueError:
+                logger.warning(
+                    "Rubric path traversal blocked",
+                    payer_name=payer_name,
+                    resolved_path=str(payer_path),
+                )
+                raise ValueError(f"Invalid rubric path for payer: {payer_name}")
             if payer_path.exists():
                 rubric_path = payer_path
 

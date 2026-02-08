@@ -31,7 +31,7 @@ export interface PayerAssessmentSummary {
   criteriaMet: number
   criteriaTotal: number
   estimatedTurnaround?: string // e.g., "3-5 days"
-  coverageStatus?: 'covered' | 'partially_covered' | 'not_covered' | 'review_required'
+  coverageStatus?: string // Backend BackendCoverageStatus: covered, likely_covered, requires_pa, conditional, pend, not_covered, requires_human_review, unknown
   keyIssue?: string // Primary blocker if any
 }
 
@@ -60,9 +60,9 @@ function getRecommendation(
       }
     } else {
       return {
-        text: `${secondary.payerName} shows better coverage`,
-        recommendedPayer: secondary.payerName,
-        reasoning: `Consider ${secondary.payerName} as primary submission despite being secondary insurance. ${Math.round((secondaryScore - primaryScore) * 100)}% higher likelihood of approval.`,
+        text: `${secondary.payerName} shows better coverage, but COB rules require primary-first`,
+        recommendedPayer: primary.payerName,
+        reasoning: `${secondary.payerName} has ${Math.round((secondaryScore - primaryScore) * 100)}% higher likelihood, but Coordination of Benefits rules require submitting to ${primary.payerName} (primary) first. Prepare stronger documentation for primary submission.`,
       }
     }
   }

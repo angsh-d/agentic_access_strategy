@@ -73,18 +73,9 @@ async def compare_weight_scenarios(
     try:
         # First get the case assessments
         result = await strategy_service.score_strategies_for_case(request.case_id)
-        assessments = {}
 
-        # Get assessments from the case
-        from backend.storage.database import get_db
-        from backend.storage.case_repository import CaseRepository
-
-        async with get_db() as session:
-            repo = CaseRepository(session)
-            case = await repo.get_by_id(request.case_id)
-            if case:
-                assessments = case.coverage_assessments or {}
-
+        # Get assessments through the service layer (not direct DB access)
+        assessments = await strategy_service.get_case_assessments(request.case_id)
         if not assessments:
             raise ValueError("No coverage assessments found for case")
 

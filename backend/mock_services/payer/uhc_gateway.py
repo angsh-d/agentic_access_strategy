@@ -1,5 +1,5 @@
 """Mock UHC payer gateway implementation."""
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 from uuid import uuid4
 
@@ -54,9 +54,9 @@ class UHCGateway(PayerGateway):
         # Store submission
         self._pa_store[reference_number] = {
             "submission": submission,
-            "submitted_at": datetime.utcnow(),
+            "submitted_at": datetime.now(timezone.utc),
             "status": PAStatus.SUBMITTED,
-            "status_history": [{"status": PAStatus.SUBMITTED, "timestamp": datetime.utcnow()}]
+            "status_history": [{"status": PAStatus.SUBMITTED, "timestamp": datetime.now(timezone.utc)}]
         }
 
         return PAResponse(
@@ -64,7 +64,7 @@ class UHCGateway(PayerGateway):
             status=PAStatus.SUBMITTED,
             payer_name=self.payer_name,
             message="Authorization request submitted successfully. Tracking number assigned.",
-            next_review_date=datetime.utcnow() + timedelta(days=3)
+            next_review_date=datetime.now(timezone.utc) + timedelta(days=3)
         )
 
     async def check_status(self, reference_number: str) -> PAResponse:
@@ -100,8 +100,8 @@ class UHCGateway(PayerGateway):
             payer_name=self.payer_name,
             message="Authorization approved. Please note biosimilar preference.",
             approval_details={
-                "effective_date": datetime.utcnow().strftime("%Y-%m-%d"),
-                "expiration_date": (datetime.utcnow() + timedelta(days=365)).strftime("%Y-%m-%d"),
+                "effective_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                "expiration_date": (datetime.now(timezone.utc) + timedelta(days=365)).strftime("%Y-%m-%d"),
                 "approved_quantity": "Up to 10mg/kg per infusion",
                 "approved_frequency": "Per FDA labeling",
                 "preferred_product": "Inflectra or Renflexis (biosimilar)",
@@ -123,7 +123,7 @@ class UHCGateway(PayerGateway):
                 "TB QuantiFERON-Gold or T-SPOT.TB result within 90 days",
                 "If positive: documentation of INH prophylaxis or treatment"
             ],
-            next_review_date=datetime.utcnow() + timedelta(days=14)
+            next_review_date=datetime.now(timezone.utc) + timedelta(days=14)
         )
 
     def _biosimilar_redirect(self, reference_number: str, pa_data: Dict) -> PAResponse:
@@ -140,7 +140,7 @@ class UHCGateway(PayerGateway):
                 "approved_alternatives": ["Inflectra", "Renflexis", "Avsola"],
                 "appeal_available": True
             },
-            appeal_deadline=datetime.utcnow() + timedelta(days=180)
+            appeal_deadline=datetime.now(timezone.utc) + timedelta(days=180)
         )
 
     async def submit_documents(
@@ -164,7 +164,7 @@ class UHCGateway(PayerGateway):
             status=PAStatus.PENDING,
             payer_name=self.payer_name,
             message="Documentation received. Under clinical review.",
-            next_review_date=datetime.utcnow() + timedelta(days=2)
+            next_review_date=datetime.now(timezone.utc) + timedelta(days=2)
         )
 
     async def submit_appeal(
@@ -190,7 +190,7 @@ class UHCGateway(PayerGateway):
             status=PAStatus.APPEAL_PENDING,
             payer_name=self.payer_name,
             message="Appeal accepted for review. Expedited review if urgent.",
-            next_review_date=datetime.utcnow() + timedelta(days=7)
+            next_review_date=datetime.now(timezone.utc) + timedelta(days=7)
         )
 
     async def request_peer_to_peer(
@@ -204,7 +204,7 @@ class UHCGateway(PayerGateway):
             reference=reference_number
         )
 
-        scheduled_time = datetime.utcnow() + timedelta(days=1, hours=14)
+        scheduled_time = datetime.now(timezone.utc) + timedelta(days=1, hours=14)
 
         return {
             "reference_number": reference_number,

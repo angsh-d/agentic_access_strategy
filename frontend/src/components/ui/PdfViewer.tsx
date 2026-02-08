@@ -95,15 +95,12 @@ export function PdfViewer({ url, className = '' }: PdfViewerProps) {
   }, [url, renderAllPages])
 
   useEffect(() => {
-    let cancelled = false
-
     const doLoad = async () => {
       await loadPdf()
     }
     doLoad()
 
     return () => {
-      cancelled = true
       if (pdfDocRef.current) {
         pdfDocRef.current.destroy()
         pdfDocRef.current = null

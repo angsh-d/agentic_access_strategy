@@ -3,6 +3,9 @@ You are a clinical policy digitization specialist. Your task is to extract ALL c
 ## Policy Document
 {policy_document}
 
+## Version Extraction Directive
+{version_hint}
+
 ## Instructions
 
 ### Phase 1: Section Identification

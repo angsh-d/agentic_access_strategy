@@ -94,7 +94,7 @@ async function request<T>(
         const errorBody = await response.json()
         error = {
           code: errorBody.code || `HTTP_${response.status}`,
-          message: errorBody.message || response.statusText,
+          message: errorBody.detail || errorBody.message || response.statusText,
           details: errorBody.details,
         }
       } catch {
@@ -390,6 +390,54 @@ export const policiesApi = {
       method: 'POST',
       body: JSON.stringify(data),
     })
+  },
+
+  /**
+   * Infer payer, medication, and effective date from an uploaded policy file.
+   */
+  inferMetadata: async (file: File): Promise<{
+    payer_name: string | null
+    medication_name: string | null
+    effective_date: string | null
+  }> => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await fetch(ENDPOINTS.policyInferMetadata, {
+      method: 'POST',
+      body: formData,
+    })
+    if (!response.ok) {
+      throw new ApiRequestError(`HTTP_${response.status}`, 'Metadata inference failed')
+    }
+    return response.json()
+  },
+
+  /**
+   * Upload a policy file (multipart/form-data) and trigger digitalization pipeline.
+   * Uses raw fetch instead of the JSON request wrapper.
+   */
+  upload: async (formData: FormData): Promise<{
+    status: string
+    version: string
+    cache_id: string
+    extraction_quality: string
+    criteria_count: number
+    indications_count: number
+    message?: string
+  }> => {
+    const response = await fetch(ENDPOINTS.policyUpload, {
+      method: 'POST',
+      body: formData,
+      // No Content-Type header — browser sets multipart boundary automatically
+    })
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({ detail: response.statusText }))
+      throw new ApiRequestError(
+        `HTTP_${response.status}`,
+        errorBody.detail || errorBody.message || response.statusText,
+      )
+    }
+    return response.json()
   },
 }
 

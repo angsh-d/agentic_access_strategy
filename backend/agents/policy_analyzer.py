@@ -1,4 +1,5 @@
 """Policy analyzer agent for coverage assessment."""
+import json
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 
@@ -7,8 +8,11 @@ from backend.models.case_state import CaseState
 from backend.reasoning.policy_reasoner import get_policy_reasoner
 from backend.storage.waypoint_writer import get_waypoint_writer
 from backend.config.logging_config import get_logger
+from backend.config.settings import get_settings
 
 logger = get_logger(__name__)
+
+PATIENTS_DIR = Path(get_settings().patients_dir)
 
 
 class PolicyAnalyzerAgent:
@@ -62,8 +66,19 @@ class PolicyAnalyzerAgent:
             "allergies": patient.allergies,
             "contraindications": patient.contraindications,
             "prior_treatments": medication.prior_treatments,
-            "lab_results": medication.supporting_labs
+            "lab_results": medication.supporting_labs,
         }
+
+        # Enrich with full clinical context from patient data file
+        raw_patient = self._load_raw_patient_data(patient.patient_id)
+        if raw_patient:
+            for key in (
+                "pre_biologic_screening", "disease_activity", "clinical_history",
+                "laboratory_results", "procedures", "documentation_gaps",
+                "diagnoses", "prior_treatments",
+            ):
+                if key in raw_patient and key not in patient_info:
+                    patient_info[key] = raw_patient[key]
 
         medication_info = {
             "medication_name": medication.medication_name,
@@ -243,8 +258,20 @@ class PolicyAnalyzerAgent:
             "allergies": patient.allergies,
             "contraindications": patient.contraindications,
             "prior_treatments": medication.prior_treatments,
-            "lab_results": medication.supporting_labs
+            "lab_results": medication.supporting_labs,
         }
+
+        # Enrich with full clinical context from patient data file
+        # so the LLM can identify documentation gaps (e.g. TB/Hep B screenings)
+        raw_patient = self._load_raw_patient_data(patient.patient_id)
+        if raw_patient:
+            for key in (
+                "pre_biologic_screening", "disease_activity", "clinical_history",
+                "laboratory_results", "procedures", "documentation_gaps",
+                "diagnoses", "prior_treatments",
+            ):
+                if key in raw_patient and key not in patient_info:
+                    patient_info[key] = raw_patient[key]
 
         medication_info = {
             "medication_name": medication.medication_name,
@@ -364,6 +391,19 @@ class PolicyAnalyzerAgent:
         all_gaps.sort(key=lambda g: priority_order.get(g["priority"], 99))
 
         return all_gaps
+
+    @staticmethod
+    def _load_raw_patient_data(patient_id: str) -> Optional[Dict[str, Any]]:
+        """Load full raw patient JSON from data file for clinical context enrichment."""
+        patient_file = PATIENTS_DIR / f"{patient_id}.json"
+        if not patient_file.exists():
+            return None
+        try:
+            with open(patient_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning("Could not load raw patient data", patient_id=patient_id, error=str(e))
+            return None
 
 
 # Global instance

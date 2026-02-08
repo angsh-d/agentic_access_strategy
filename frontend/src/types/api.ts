@@ -175,44 +175,48 @@ export interface DecisionStatusResponse {
 
 // === WebSocket Messages ===
 
+/**
+ * WebSocket message types — matches backend event names.
+ * Backend uses "event" field; we normalize to "type" on receipt.
+ */
 export type WebSocketMessageType =
-  | 'case_updated'
-  | 'stage_changed'
-  | 'agent_started'
-  | 'agent_completed'
-  | 'strategy_selected'
-  | 'payer_response'
+  | 'connected'
+  | 'heartbeat'
+  | 'stage_update'
+  | 'processing_started'
+  | 'processing_completed'
+  | 'processing_error'
+  | 'status'
   | 'error'
 
 export interface WebSocketMessage {
+  /** Normalized event type (from backend "event" field) */
   type: WebSocketMessageType
-  case_id: string
+  /** Original backend event name (for backward compat) */
+  event?: string
+  case_id?: string
   timestamp: string
-  data: Record<string, unknown>
+  [key: string]: unknown
 }
 
-export interface CaseUpdatedMessage extends WebSocketMessage {
-  type: 'case_updated'
-  data: {
-    case: CaseState
-    changed_fields: string[]
-  }
+export interface StageUpdateMessage extends WebSocketMessage {
+  type: 'stage_update'
+  stage: string
+  previous_stage?: string
+  messages?: string[]
 }
 
-export interface StageChangedMessage extends WebSocketMessage {
-  type: 'stage_changed'
-  data: {
-    previous_stage: CaseStage
-    new_stage: CaseStage
-    case: CaseState
-  }
+export interface ProcessingErrorMessage extends WebSocketMessage {
+  type: 'processing_error'
+  error: string
 }
 
-export interface AgentMessage extends WebSocketMessage {
-  type: 'agent_started' | 'agent_completed'
-  data: {
-    agent_name: string
-    task?: string
-    result?: Record<string, unknown>
-  }
+export interface PolicyUpdateNotification {
+  event: 'policy_update'
+  payer: string
+  medication: string
+  version: string
+  extraction_quality?: string
+  criteria_count?: number
+  timestamp: string
 }

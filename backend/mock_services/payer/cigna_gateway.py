@@ -1,5 +1,5 @@
 """Mock Cigna payer gateway implementation."""
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 from uuid import uuid4
 
@@ -54,9 +54,9 @@ class CignaGateway(PayerGateway):
         # Store submission for status checks
         self._pa_store[reference_number] = {
             "submission": submission,
-            "submitted_at": datetime.utcnow(),
+            "submitted_at": datetime.now(timezone.utc),
             "status": PAStatus.SUBMITTED,
-            "status_history": [{"status": PAStatus.SUBMITTED, "timestamp": datetime.utcnow()}]
+            "status_history": [{"status": PAStatus.SUBMITTED, "timestamp": datetime.now(timezone.utc)}]
         }
 
         return PAResponse(
@@ -64,7 +64,7 @@ class CignaGateway(PayerGateway):
             status=PAStatus.SUBMITTED,
             payer_name=self.payer_name,
             message="Prior authorization request received. Expected determination within 5 business days.",
-            next_review_date=datetime.utcnow() + timedelta(days=5)
+            next_review_date=datetime.now(timezone.utc) + timedelta(days=5)
         )
 
     async def check_status(self, reference_number: str) -> PAResponse:
@@ -100,8 +100,8 @@ class CignaGateway(PayerGateway):
             payer_name=self.payer_name,
             message="Prior authorization approved.",
             approval_details={
-                "effective_date": datetime.utcnow().strftime("%Y-%m-%d"),
-                "expiration_date": (datetime.utcnow() + timedelta(days=180)).strftime("%Y-%m-%d"),
+                "effective_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                "expiration_date": (datetime.now(timezone.utc) + timedelta(days=180)).strftime("%Y-%m-%d"),
                 "approved_quantity": "400mg per infusion",
                 "approved_frequency": "Every 8 weeks after induction"
             },
@@ -121,7 +121,7 @@ class CignaGateway(PayerGateway):
                 "Recent disease activity score (DAS28)",
                 "Documentation of methotrexate trial duration"
             ],
-            next_review_date=datetime.utcnow() + timedelta(days=10)
+            next_review_date=datetime.now(timezone.utc) + timedelta(days=10)
         )
 
     def _denial_response(self, reference_number: str, pa_data: Dict) -> PAResponse:
@@ -133,7 +133,7 @@ class CignaGateway(PayerGateway):
             message="Prior authorization denied. See denial reason for details.",
             denial_reason="Step therapy requirements not met. Documentation does not demonstrate adequate trial of methotrexate at optimal dose (15-25mg weekly) for minimum 12 weeks.",
             denial_code="STH-001",
-            appeal_deadline=datetime.utcnow() + timedelta(days=180)
+            appeal_deadline=datetime.now(timezone.utc) + timedelta(days=180)
         )
 
     def _recovery_response(self, reference_number: str, pa_data: Dict) -> PAResponse:
@@ -141,7 +141,7 @@ class CignaGateway(PayerGateway):
         history = pa_data.get("status_history", [])
         if len(history) < 2:
             # First check - denial
-            pa_data["status_history"].append({"status": PAStatus.DENIED, "timestamp": datetime.utcnow()})
+            pa_data["status_history"].append({"status": PAStatus.DENIED, "timestamp": datetime.now(timezone.utc)})
             return self._denial_response(reference_number, pa_data)
         else:
             # After appeal - approved
@@ -151,8 +151,8 @@ class CignaGateway(PayerGateway):
                 payer_name=self.payer_name,
                 message="Appeal approved following peer-to-peer review.",
                 approval_details={
-                    "effective_date": datetime.utcnow().strftime("%Y-%m-%d"),
-                    "expiration_date": (datetime.utcnow() + timedelta(days=180)).strftime("%Y-%m-%d"),
+                    "effective_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                    "expiration_date": (datetime.now(timezone.utc) + timedelta(days=180)).strftime("%Y-%m-%d"),
                     "notes": "Approved based on clinical justification provided during P2P review"
                 },
                 quantity_approved="400mg",
@@ -173,14 +173,14 @@ class CignaGateway(PayerGateway):
 
         if reference_number in self._pa_store:
             self._pa_store[reference_number]["documents_submitted"] = documents
-            self._pa_store[reference_number]["docs_submitted_at"] = datetime.utcnow()
+            self._pa_store[reference_number]["docs_submitted_at"] = datetime.now(timezone.utc)
 
         return PAResponse(
             reference_number=reference_number,
             status=PAStatus.PENDING,
             payer_name=self.payer_name,
             message=f"Received {len(documents)} document(s). Request under review.",
-            next_review_date=datetime.utcnow() + timedelta(days=3)
+            next_review_date=datetime.now(timezone.utc) + timedelta(days=3)
         )
 
     async def submit_appeal(
@@ -207,7 +207,7 @@ class CignaGateway(PayerGateway):
             status=PAStatus.APPEAL_PENDING,
             payer_name=self.payer_name,
             message="Appeal received. Medical director review scheduled.",
-            next_review_date=datetime.utcnow() + timedelta(days=10)
+            next_review_date=datetime.now(timezone.utc) + timedelta(days=10)
         )
 
     async def request_peer_to_peer(
@@ -223,7 +223,7 @@ class CignaGateway(PayerGateway):
         )
 
         # Mock P2P scheduling
-        scheduled_time = datetime.utcnow() + timedelta(days=2, hours=10)
+        scheduled_time = datetime.now(timezone.utc) + timedelta(days=2, hours=10)
 
         return {
             "reference_number": reference_number,

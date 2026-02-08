@@ -2,7 +2,7 @@
 import hashlib
 import json
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from uuid import uuid4
 
@@ -16,7 +16,7 @@ class DecisionEvent(BaseModel):
     event_id: str = Field(default_factory=lambda: str(uuid4()))
     case_id: str = Field(..., description="Case this event belongs to")
     event_type: EventType = Field(..., description="Type of event")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # What happened
     decision_made: str = Field(..., description="Description of the decision")

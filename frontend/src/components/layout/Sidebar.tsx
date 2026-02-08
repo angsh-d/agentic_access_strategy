@@ -102,14 +102,11 @@ export function Sidebar() {
 
       <div className="px-3 pb-3">
         <div className="p-3 rounded-xl bg-black/[0.03]">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-grey-400 mb-1.5">Demo Scenario</p>
-          <div className="flex items-center justify-between">
-            <span className="text-[13px] font-medium text-grey-700">
-              Maria R.
-            </span>
-            <span className="text-[11px] text-grey-400 font-medium">
-              Ozempic PA
-            </span>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-grey-400 mb-1.5">Platform</p>
+          <div className="flex flex-col gap-1">
+            <p className="text-[11px] text-grey-500 leading-relaxed">
+              Multi-payer prior authorization with AI-driven policy reasoning and strategy optimization.
+            </p>
           </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
 """Coverage assessment models."""
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field
 
@@ -35,7 +35,7 @@ class CoverageAssessment(BaseModel):
     payer_name: str = Field(..., description="Name of the payer")
     policy_name: str = Field(..., description="Name of the policy document analyzed")
     medication_name: str = Field(..., description="Medication being assessed")
-    assessment_timestamp: datetime = Field(default_factory=datetime.utcnow)
+    assessment_timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Overall status
     coverage_status: CoverageStatus = Field(..., description="Overall coverage status")
@@ -81,4 +81,4 @@ class CoverageAssessment(BaseModel):
 
     def get_critical_gaps(self) -> List[DocumentationGap]:
         """Get high-priority documentation gaps."""
-        return [gap for gap in self.documentation_gaps if gap.priority == "high"]
+        return [gap for gap in self.documentation_gaps if gap.priority.lower() == "high"]

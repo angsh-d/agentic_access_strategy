@@ -1,7 +1,8 @@
 import { ENDPOINTS } from '@/lib/constants'
-import type { WebSocketMessage } from '@/types/api'
+import type { WebSocketMessage, PolicyUpdateNotification } from '@/types/api'
 
 type MessageHandler = (message: WebSocketMessage) => void
+type NotificationHandler = (message: PolicyUpdateNotification) => void
 type ConnectionHandler = () => void
 type ErrorHandler = (error: Event) => void
 
@@ -53,7 +54,13 @@ export class CaseWebSocket {
 
     this.ws.onmessage = (event) => {
       try {
-        const message = JSON.parse(event.data) as WebSocketMessage
+        const raw = JSON.parse(event.data)
+        // Normalize: backend sends "event" field, frontend expects "type"
+        const message: WebSocketMessage = {
+          ...raw,
+          type: raw.type || raw.event || 'unknown',
+          case_id: raw.case_id || this.caseId,
+        }
         this.messageHandlers.forEach(handler => handler(message))
       } catch (error) {
         console.error('Failed to parse WebSocket message:', error)
@@ -83,7 +90,7 @@ export class CaseWebSocket {
     }
 
     this.reconnectAttempts++
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1)
+    const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), 30000)
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
@@ -155,6 +162,83 @@ export function createCaseWebSocket(
   const ws = new CaseWebSocket(caseId, options)
   ws.connect()
   return ws
+}
+
+/**
+ * WebSocket connection manager for system-wide notifications
+ */
+export class NotificationsWebSocket {
+  private ws: WebSocket | null = null
+  private handlers: Set<NotificationHandler> = new Set()
+  private reconnectAttempts = 0
+  private maxReconnectAttempts = 5
+  private reconnectDelay = 1000
+  private isIntentionallyClosed = false
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+  connect(): void {
+    if (this.ws?.readyState === WebSocket.OPEN) return
+
+    const url = ENDPOINTS.notificationsWs
+    this.ws = new WebSocket(url)
+
+    this.ws.onopen = () => {
+      this.reconnectAttempts = 0
+    }
+
+    this.ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data)
+        if (message.event === 'policy_update') {
+          this.handlers.forEach(handler => handler(message as PolicyUpdateNotification))
+        }
+      } catch (error) {
+        console.error('Failed to parse notification:', error)
+      }
+    }
+
+    this.ws.onclose = () => {
+      if (!this.isIntentionallyClosed) {
+        this.attemptReconnect()
+      }
+    }
+
+    this.ws.onerror = (error) => {
+      console.error('Notifications WebSocket error:', error)
+    }
+  }
+
+  private attemptReconnect(): void {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) return
+    this.reconnectAttempts++
+    const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), 30000)
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
+      if (!this.isIntentionallyClosed) this.connect()
+    }, delay)
+  }
+
+  onNotification(handler: NotificationHandler): () => void {
+    this.handlers.add(handler)
+    return () => { this.handlers.delete(handler) }
+  }
+
+  disconnect(): void {
+    this.isIntentionallyClosed = true
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+    if (this.ws) {
+      this.ws.close()
+      this.ws = null
+    }
+    this.handlers.clear()
+  }
+
+  get isConnected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN
+  }
 }
 
 export default CaseWebSocket

@@ -1,9 +1,9 @@
 """Repository for case CRUD operations."""
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from uuid import uuid4
 
-from sqlalchemy import select, update, delete
+from sqlalchemy import select, update, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.storage.models import CaseModel, CaseStateSnapshotModel
@@ -108,41 +108,79 @@ class CaseRepository:
         result = await self.session.execute(query)
         return list(result.scalars().all())
 
+    async def count(self, stage: Optional[CaseStage] = None) -> int:
+        """
+        Count total cases with optional stage filter.
+
+        Args:
+            stage: Optional stage filter
+
+        Returns:
+            Total number of matching cases
+        """
+        query = select(func.count(CaseModel.id))
+        if stage:
+            query = query.where(CaseModel.stage == stage.value)
+        result = await self.session.execute(query)
+        return result.scalar_one()
+
     async def update(
         self,
         case_id: str,
         updates: Dict[str, Any],
-        change_description: Optional[str] = None
+        change_description: Optional[str] = None,
+        expected_version: Optional[int] = None
     ) -> Optional[CaseModel]:
         """
-        Update a case with versioning.
+        Update a case with versioning and optimistic locking.
 
         Args:
             case_id: Case ID
             updates: Dictionary of fields to update
             change_description: Description of the change
+            expected_version: If provided, enforces optimistic locking.
+                              Update fails if current version != expected_version.
 
         Returns:
             Updated case model
+
+        Raises:
+            ValueError: If optimistic lock fails (version mismatch)
         """
         case = await self.get_by_id(case_id)
         if not case:
             return None
 
+        # Optimistic locking check
+        if expected_version is not None and case.version != expected_version:
+            raise ValueError(
+                f"Optimistic lock failed for case {case_id}: "
+                f"expected version {expected_version}, found {case.version}. "
+                f"Another operation may have modified this case concurrently."
+            )
+
         # Increment version
         new_version = case.version + 1
         updates["version"] = new_version
-        updates["updated_at"] = datetime.utcnow()
+        updates["updated_at"] = datetime.now(timezone.utc)
 
         # Apply updates
         for key, value in updates.items():
             if hasattr(case, key):
                 setattr(case, key, value)
 
+        # Create snapshot and flush together for atomicity
+        snapshot = CaseStateSnapshotModel(
+            id=str(uuid4()),
+            case_id=case.id,
+            version=case.version,
+            created_at=datetime.now(timezone.utc),
+            state_data=case.to_dict(),
+            change_description=change_description or "Case updated",
+            changed_by="system"
+        )
+        self.session.add(snapshot)
         await self.session.flush()
-
-        # Create snapshot
-        await self._create_snapshot(case, change_description or "Case updated")
 
         logger.info("Case updated", case_id=case_id, version=new_version)
         return case
@@ -235,7 +273,7 @@ class CaseRepository:
             id=str(uuid4()),
             case_id=case.id,
             version=case.version,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             state_data=case.to_dict(),
             change_description=change_description,
             changed_by="system"

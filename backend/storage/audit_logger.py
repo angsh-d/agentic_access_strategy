@@ -1,5 +1,5 @@
 """Immutable audit logger for decision tracking."""
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from uuid import uuid4
 
@@ -66,7 +66,7 @@ class AuditLogger:
             event_id=str(uuid4()),
             case_id=case_id,
             event_type=event_type,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             decision_made=decision_made,
             reasoning=reasoning,
             stage=stage,

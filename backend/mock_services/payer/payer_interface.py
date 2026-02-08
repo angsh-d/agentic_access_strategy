@@ -1,7 +1,7 @@
 """Abstract payer gateway interface."""
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional, Any
 
@@ -42,7 +42,7 @@ class PAResponse:
     reference_number: str
     status: PAStatus
     payer_name: str
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     message: Optional[str] = None
     approval_details: Optional[Dict[str, Any]] = None
     denial_reason: Optional[str] = None
@@ -52,6 +52,22 @@ class PAResponse:
     next_review_date: Optional[datetime] = None
     quantity_approved: Optional[str] = None
     duration_approved: Optional[str] = None
+
+    def to_payer_status_value(self) -> str:
+        """Map PAStatus to PayerStatus string value for state consistency."""
+        from backend.models.enums import PayerStatus
+        mapping = {
+            PAStatus.SUBMITTED: PayerStatus.SUBMITTED,
+            PAStatus.PENDING: PayerStatus.UNDER_REVIEW,
+            PAStatus.PENDING_INFO: PayerStatus.PENDING_INFO,
+            PAStatus.APPROVED: PayerStatus.APPROVED,
+            PAStatus.DENIED: PayerStatus.DENIED,
+            PAStatus.APPEAL_PENDING: PayerStatus.APPEAL_SUBMITTED,
+            PAStatus.APPEAL_APPROVED: PayerStatus.APPEAL_APPROVED,
+            PAStatus.APPEAL_DENIED: PayerStatus.APPEAL_DENIED,
+        }
+        payer_status = mapping.get(self.status)
+        return payer_status.value if payer_status else self.status.value
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""

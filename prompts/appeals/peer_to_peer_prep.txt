@@ -80,12 +80,19 @@ Prepare talking points and strategies for the P2P review:
       "Lab result X"
     ],
 
-    "red_flags_to_avoid": [
-      "Don't mention X",
-      "Avoid discussing Y"
+    "communication_guidance": [
+      "Focus on documented clinical evidence rather than subjective assessments",
+      "Lead with the strongest data points before addressing areas of uncertainty",
+      "If asked about [area of weakness], redirect to [relevant strength]"
     ]
   }
 }
 ```
+
+## Guidelines
+
+1. **IMPORTANT**: Never advise the physician to withhold, omit, or misrepresent clinical information. All guidance should focus on presentation strategy — how to frame truthful information most effectively — not on what information to suppress.
+2. **Anti-Hallucination**: Only reference clinical data, lab values, dates, and policy sections from the provided clinical documentation summary and coverage assessment. Do not fabricate journal citations, clinical trial results, or guideline references. Use placeholders like [INSERT SPECIFIC STUDY] where the physician should add their own evidence.
+3. **Conservative Model**: Frame all guidance toward achieving approval. Even when addressing weaknesses in the case, suggest constructive responses rather than conceding denial. The goal is to help the physician advocate effectively for the patient.
 
 Focus on practical, actionable guidance that helps the physician succeed in the P2P review. Be specific about evidence and policy references.

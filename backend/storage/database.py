@@ -19,26 +19,36 @@ def get_engine():
     global _engine
     if _engine is None:
         settings = get_settings()
-        db_url = settings.database_url
+        db_url = settings.external_database_url or settings.database_url
         if db_url.startswith("postgresql://"):
             db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
         elif db_url.startswith("postgres://"):
             db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
-        if "sslmode=" in db_url:
+        if "sslmode=" in db_url or "channel_binding=" in db_url:
             from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
             parsed = urlparse(db_url)
             params = parse_qs(parsed.query)
             ssl_mode = params.pop("sslmode", ["disable"])[0]
+            params.pop("channel_binding", None)
             new_query = urlencode(params, doseq=True)
             db_url = urlunparse(parsed._replace(query=new_query))
-            connect_args = {"ssl": None} if ssl_mode == "disable" else {}
+            if ssl_mode == "disable":
+                connect_args = {"ssl": None}
+            else:
+                connect_args = {"ssl": "require"}
         else:
             connect_args = {}
+        # Disable asyncpg prepared statement cache to avoid
+        # InvalidCachedStatementError after schema changes.
+        connect_args.setdefault("statement_cache_size", 0)
         _engine = create_async_engine(
             db_url,
             echo=settings.app_env == "development",
             future=True,
             connect_args=connect_args,
+            pool_pre_ping=True,
+            pool_size=10,
+            max_overflow=20,
         )
         db_type = db_url.split("://")[0] if "://" in db_url else "unknown"
         logger.info("Database engine created", db_type=db_type)
@@ -63,6 +73,25 @@ def get_session_factory():
 AsyncSessionLocal = get_session_factory
 
 
+async def _ensure_amendment_columns(engine) -> None:
+    """Add amendment columns to policy_cache if they don't exist (PostgreSQL)."""
+    from sqlalchemy import text
+
+    async with engine.begin() as conn:
+        for col, sql_type in [
+            ("source_filename", "VARCHAR(500)"),
+            ("upload_notes", "TEXT"),
+            ("amendment_date", "TIMESTAMPTZ"),
+            ("parent_version_id", "VARCHAR(36)"),
+        ]:
+            try:
+                await conn.execute(text(
+                    f"ALTER TABLE policy_cache ADD COLUMN IF NOT EXISTS {col} {sql_type}"
+                ))
+            except Exception as e:
+                logger.debug(f"Column {col} may already exist: {e}")
+
+
 async def init_db() -> None:
     """Initialize the database, creating all tables."""
     from backend.storage.models import Base as ModelsBase
@@ -70,6 +99,7 @@ async def init_db() -> None:
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(ModelsBase.metadata.create_all)
+    await _ensure_amendment_columns(engine)
     logger.info("Database initialized")
 
 

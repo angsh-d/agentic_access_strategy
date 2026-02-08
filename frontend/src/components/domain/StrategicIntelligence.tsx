@@ -8,7 +8,7 @@
  * - Actionable insights from historical claims analysis
  */
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -35,10 +35,12 @@ interface StrategicIntelligenceProps {
     patient?: { primary_payer?: string; first_name?: string; diagnosis_codes?: string[] }
     medication?: { medication_name?: string }
     metadata?: { source_patient_id?: string }
+    coverage_assessments?: Record<string, any> | null
     case?: {
       patient?: { primary_payer?: string; first_name?: string; diagnosis_codes?: string[] }
       medication?: { medication_name?: string }
       metadata?: { source_patient_id?: string }
+      coverage_assessments?: Record<string, any> | null
     }
   } | null
   className?: string
@@ -144,10 +146,18 @@ async function fetchStrategicIntelligence(caseId: string): Promise<StrategicInte
   const data = await request<any>(`/api/v1/cases/${caseId}/strategic-intelligence`)
 
   // Transform API response to match expected interface - no fallback values
+  // API returns timing_recommendations (not timing_insights) and optimal_submission_day (not best_submission_day)
+  const timingRaw = data.timing_insights || data.timing_recommendations
+  const timing_insights = timingRaw ? {
+    best_submission_day: timingRaw.best_submission_day || timingRaw.optimal_submission_day,
+    avg_turnaround_days: timingRaw.avg_turnaround_days || data.similar_cases?.avg_days_to_decision,
+    rush_success_rate: timingRaw.rush_success_rate,
+  } : undefined
+
   return {
     case_id: data.case_id,
     similar_cases: data.similar_cases,
-    matching_criteria: data.matching_criteria,
+    matching_criteria: data.matching_criteria || { medication_match: 0, payer_match: 0, diagnosis_match: 0 },
     documentation_insights: (data.documentation_insights || []).map((insight: {
       documentation_type?: string
       document_type?: string
@@ -166,7 +176,7 @@ async function fetchStrategicIntelligence(caseId: string): Promise<StrategicInte
       cases_without: insight.cases_without,
     })),
     payer_insights: data.payer_insights,
-    timing_insights: data.timing_insights,
+    timing_insights,
     confidence_score: data.confidence_score,
     compensating_factors: data.compensating_factors || [],
     agentic_insights: data.agentic_insights || [],
@@ -208,68 +218,27 @@ interface UnmetPolicyRequirement {
   category: string
 }
 
+/**
+ * Extract unmet criteria from LLM coverage assessment results.
+ * Falls back to empty if no assessment is available yet.
+ */
 function evaluateUnmetPolicyCriteria(
-  digitizedPolicy: any,
-  patientData: any,
-  patientDiagnoses: any[]
+  _digitizedPolicy: any,
+  _patientData: any,
+  _patientDiagnoses: any[],
+  coverageAssessment?: any,
 ): UnmetPolicyRequirement[] {
-  if (!digitizedPolicy || !patientData) return []
+  if (!coverageAssessment) return []
 
   const unmetRequirements: UnmetPolicyRequirement[] = []
-  const patientCodes = patientDiagnoses?.map(d => d.icd10_code?.toUpperCase()) || []
-  let matchedIndication = null
+  const assessments = coverageAssessment.criteria_assessments || coverageAssessment.criteria_details || []
 
-  for (const indication of (digitizedPolicy.indications || [])) {
-    if (indication.indication_codes) {
-      for (const code of indication.indication_codes) {
-        if (patientCodes.some((pc: string) => pc?.startsWith(code.code?.split('.')[0]))) {
-          matchedIndication = indication
-          break
-        }
-      }
-    }
-    if (matchedIndication) break
-
-    const indicationNameLower = indication.indication_name?.toLowerCase() || ''
-    for (const dx of patientDiagnoses || []) {
-      const dxDesc = dx.description?.toLowerCase() || ''
-      if (
-        (indicationNameLower.includes('crohn') && dxDesc.includes('crohn')) ||
-        (indicationNameLower.includes('ulcerative colitis') && dxDesc.includes('ulcerative colitis'))
-      ) {
-        matchedIndication = indication
-        break
-      }
-    }
-  }
-
-  if (!matchedIndication) return []
-
-  const criteriaIds = new Set<string>()
-  const collectCriteriaIds = (groupId: string) => {
-    const group = digitizedPolicy.criterion_groups?.[groupId]
-    if (!group) return
-    group.criteria?.forEach((id: string) => criteriaIds.add(id))
-    group.subgroups?.forEach((subgroupId: string) => collectCriteriaIds(subgroupId))
-  }
-
-  if (matchedIndication.initial_approval_criteria) {
-    collectCriteriaIds(matchedIndication.initial_approval_criteria)
-  }
-
-  const relevantCriteria = Array.from(criteriaIds)
-    .map(id => digitizedPolicy.atomic_criteria?.[id])
-    .filter(Boolean)
-
-  for (const criterion of relevantCriteria) {
-    const status = evaluateSingleCriterion(criterion, patientData)
-    if (status === 'not_met') {
+  for (const assessment of assessments) {
+    if (assessment.is_met === false) {
       unmetRequirements.push({
-        name: criterion.name,
-        description: criterion.description,
-        policyText: criterion.policy_text,
-        clinicalCodes: criterion.clinical_codes,
-        category: criterion.category || 'other'
+        name: assessment.criterion_name || 'Unknown criterion',
+        description: assessment.criterion_description || assessment.reasoning || '',
+        category: 'other',
       })
     }
   }
@@ -277,48 +246,9 @@ function evaluateUnmetPolicyCriteria(
   return unmetRequirements
 }
 
-function evaluateSingleCriterion(criterion: any, patientData: any): 'met' | 'not_met' | 'unknown' {
-  const criterionType = criterion.criterion_type
-  const criterionId = criterion.criterion_id?.toLowerCase() || ''
-
-  if (criterionType === 'safety_screening_completed' || criterionType === 'safety_screening_negative') {
-    const screening = patientData.pre_biologic_screening
-    if (!screening) return 'not_met'
-
-    if (criterionId.includes('tb')) {
-      const tbScreening = screening.tuberculosis_screening || screening.tb_screening
-      if (tbScreening?.status === 'completed' || tbScreening?.status === 'COMPLETED') {
-        if (criterionType === 'safety_screening_negative') {
-          const result = tbScreening.result?.toLowerCase()
-          return (result === 'negative' || result === 'not detected') ? 'met' : 'not_met'
-        }
-        return 'met'
-      }
-      return 'not_met'
-    }
-
-    if (criterionId.includes('hep_b') || criterionId.includes('hepatitis_b')) {
-      const hepBScreening = screening.hepatitis_b_screening
-      if (hepBScreening?.status === 'completed' || hepBScreening?.status === 'COMPLETED') {
-        return 'met'
-      }
-      return 'not_met'
-    }
-
-    if (criterionId.includes('hep_c') || criterionId.includes('hepatitis_c')) {
-      const hepCScreening = screening.hepatitis_c_screening
-      if (hepCScreening?.status === 'completed' || hepCScreening?.status === 'COMPLETED') {
-        return 'met'
-      }
-      return 'not_met'
-    }
-  }
-
-  return 'unknown'
-}
-
 export function StrategicIntelligence({ caseId, caseData: providedCaseData, className }: StrategicIntelligenceProps) {
   const [showReasoning, setShowReasoning] = useState(false)
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false)
 
   // Only fetch case data if not provided as prop
   const { data: fetchedCaseData, isLoading: caseLoading } = useQuery({
@@ -335,16 +265,26 @@ export function StrategicIntelligence({ caseId, caseData: providedCaseData, clas
   // Use provided data if available, otherwise use fetched data
   const caseData = providedCaseData || fetchedCaseData
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error: queryError, refetch } = useQuery({
     queryKey: QUERY_KEYS.strategicIntelligence(caseId),
     queryFn: () => fetchStrategicIntelligence(caseId),
     staleTime: CACHE_TIMES.STATIC,
     gcTime: CACHE_TIMES.GC_TIME,
-    refetchOnMount: false,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     enabled: !!caseId,
   })
+
+  // Loading timeout - show retry after 10 seconds
+  useEffect(() => {
+    if (!isLoading && !caseLoading) {
+      setLoadingTimedOut(false)
+      return
+    }
+    const timer = setTimeout(() => setLoadingTimedOut(true), 10000)
+    return () => clearTimeout(timer)
+  }, [isLoading, caseLoading])
 
   const payerNameForQuery = caseData?.patient?.primary_payer || caseData?.case?.patient?.primary_payer
   const medicationNameForQuery = caseData?.medication?.medication_name || caseData?.case?.medication?.medication_name
@@ -355,7 +295,7 @@ export function StrategicIntelligence({ caseId, caseData: providedCaseData, clas
     queryFn: () => fetchDigitizedPolicy(payerNameForQuery!, medicationNameForQuery!),
     staleTime: CACHE_TIMES.STATIC,
     gcTime: CACHE_TIMES.GC_TIME,
-    refetchOnMount: false,
+    refetchOnMount: true,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     enabled: !!payerNameForQuery && !!medicationNameForQuery,
@@ -395,7 +335,11 @@ export function StrategicIntelligence({ caseId, caseData: providedCaseData, clas
       .sort((a, b) => (b.approval_rate_with - b.approval_rate_without) - (a.approval_rate_with - a.approval_rate_without))
 
     const patientDiagnoses = patientData?.diagnoses || patient?.diagnosis_codes?.map((code: string) => ({ icd10_code: code })) || []
-    const unmetPolicyRequirements = evaluateUnmetPolicyCriteria(digitizedPolicy, patientData, patientDiagnoses)
+    const primaryPayer = patient?.primary_payer
+    const coverageAssessment = primaryPayer
+      ? (caseData?.case?.coverage_assessments?.[primaryPayer] || caseData?.coverage_assessments?.[primaryPayer])
+      : undefined
+    const unmetPolicyRequirements = evaluateUnmetPolicyCriteria(digitizedPolicy, patientData, patientDiagnoses, coverageAssessment)
 
     const unmetSafetyScreenings = unmetPolicyRequirements.filter(req => {
       const nameLower = req.name.toLowerCase()
@@ -417,7 +361,7 @@ export function StrategicIntelligence({ caseId, caseData: providedCaseData, clas
   }, [effectiveData, caseData, patientData, digitizedPolicy])
 
   // Show loading while fetching API data (no fallback - data comes from API only)
-  if (isLoading || caseLoading) {
+  if ((isLoading || caseLoading) && !loadingTimedOut) {
     return (
       <div className={cn('space-y-3', className)}>
         <div className="bg-white rounded-2xl border border-grey-200 p-6">
@@ -430,6 +374,29 @@ export function StrategicIntelligence({ caseId, caseData: providedCaseData, clas
           </div>
           <div className="h-20 bg-grey-50 rounded-xl animate-pulse" />
         </div>
+      </div>
+    )
+  }
+
+  // Loading timed out or query errored - show retry
+  if (loadingTimedOut || queryError) {
+    return (
+      <div className={cn('p-8 bg-white rounded-2xl border border-grey-200 text-center', className)}>
+        <Clock className="w-8 h-8 text-grey-300 mx-auto mb-3" />
+        <p className="text-sm font-medium text-grey-700 mb-1">
+          {queryError ? 'Failed to load strategic intelligence' : 'Loading is taking longer than expected'}
+        </p>
+        <p className="text-xs text-grey-500 mb-4">
+          {queryError ? 'The analysis service may be unavailable.' : 'The backend may still be processing.'}
+        </p>
+        <button
+          type="button"
+          onClick={() => { setLoadingTimedOut(false); refetch() }}
+          className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-grey-900 hover:bg-grey-800 rounded-lg transition-colors"
+        >
+          <AlertCircle className="w-3.5 h-3.5" />
+          Retry
+        </button>
       </div>
     )
   }
@@ -552,7 +519,7 @@ export function StrategicIntelligence({ caseId, caseData: providedCaseData, clas
             <InsightCard
               icon={<Calendar className="w-4 h-4" />}
               title="Optimal Submission Day"
-              description={`${effectiveData.timing_insights?.best_submission_day} submissions show 15% higher first-pass approval`}
+              description={`Historical data suggests ${effectiveData.timing_insights?.best_submission_day} submissions may have faster turnaround`}
               type="timing"
             />
           )}
@@ -568,12 +535,14 @@ export function StrategicIntelligence({ caseId, caseData: providedCaseData, clas
           )}
 
           {/* Speed Insight */}
-          <InsightCard
-            icon={<Zap className="w-4 h-4" />}
-            title="Expedited Processing"
-            description={`Cases with complete pre-biologic screening resolve ${Math.round((effectiveData.timing_insights?.avg_turnaround_days || 5) * 0.3)} days faster on average`}
-            type="success"
-          />
+          {effectiveData.timing_insights?.avg_turnaround_days && (
+            <InsightCard
+              icon={<Zap className="w-4 h-4" />}
+              title="Processing Timeline"
+              description={`Average turnaround: ${effectiveData.timing_insights.avg_turnaround_days} days. Complete documentation may reduce processing time.`}
+              type="success"
+            />
+          )}
         </div>
       </div>
 
@@ -681,7 +650,7 @@ export function StrategicIntelligence({ caseId, caseData: providedCaseData, clas
           {/* Missing - Now includes safety screenings */}
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-2 h-2 rounded-full bg-red-500" />
+              <div className="w-2 h-2 rounded-full bg-semantic-error" />
               <span className="text-sm font-medium text-grey-900">
                 Missing ({missingDocs.length + unmetSafetyScreenings.length})
               </span>
@@ -694,7 +663,7 @@ export function StrategicIntelligence({ caseId, caseData: providedCaseData, clas
                     <ShieldCheck className="w-3.5 h-3.5 text-red-400" />
                     <span>{req.name}</span>
                   </div>
-                  <span className="text-xs font-medium text-red-600 px-1.5 py-0.5 bg-red-50 rounded">
+                  <span className="text-xs font-medium text-semantic-error px-1.5 py-0.5 bg-semantic-error/10 rounded">
                     Required
                   </span>
                 </div>
@@ -709,7 +678,7 @@ export function StrategicIntelligence({ caseId, caseData: providedCaseData, clas
                       <span>{formatDocName(doc.document_type)}</span>
                     </div>
                     {impact > 0.1 && (
-                      <span className="text-xs font-medium text-green-600 flex items-center gap-0.5">
+                      <span className="text-xs font-medium text-semantic-success flex items-center gap-0.5">
                         <TrendingUp className="w-3 h-3" />
                         +{Math.round(impact * 100)}%
                       </span>
@@ -809,9 +778,9 @@ export function StrategicIntelligence({ caseId, caseData: providedCaseData, clas
           <BarChart3 className="w-3 h-3" />
           <span>{totalCases} cases analyzed</span>
           <span className="text-grey-300">|</span>
-          <span>{Math.round(effectiveData.confidence_score * 100) || 90}% confidence</span>
+          <span>{effectiveData.confidence_score ? `${Math.round(effectiveData.confidence_score * 100)}% confidence` : 'Confidence pending'}</span>
         </div>
-        <span>Updated {new Date().toLocaleDateString()}</span>
+        <span>{(effectiveData as unknown as { last_updated?: string }).last_updated ? `Updated ${new Date((effectiveData as unknown as { last_updated?: string }).last_updated!).toLocaleDateString()}` : ''}</span>
       </div>
     </div>
   )
@@ -922,7 +891,7 @@ function ActionCardLight({
             <span className={cn(
               'text-xs font-medium px-2 py-0.5 rounded shrink-0',
               badgeType === 'required'
-                ? 'bg-red-50 text-red-600 border border-red-200'
+                ? 'bg-semantic-error/[0.08] text-semantic-error border border-semantic-error/20'
                 : badgeType === 'agentic'
                 ? 'bg-grey-900 text-white'
                 : 'bg-grey-100 text-grey-700'

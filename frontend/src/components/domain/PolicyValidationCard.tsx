@@ -2,7 +2,10 @@
  * PolicyValidationCard - Detailed policy criteria validation view
  *
  * Displays policy requirements with expandable categories, logical operators,
- * and real-time evaluation against patient data.
+ * and AI-evaluated assessment results from the coverage assessment LLM.
+ *
+ * When coverageAssessment is provided: uses LLM per-criterion results.
+ * When not provided (pre-analysis): shows "Pending AI Analysis" state.
  */
 
 import { useState, useMemo } from 'react'
@@ -16,25 +19,39 @@ import {
   Circle,
   Scale,
   AlertTriangle,
+  Clock,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ENDPOINTS, QUERY_KEYS, CACHE_TIMES } from '@/lib/constants'
 import { usePatientData } from '@/hooks/usePatientData'
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type CoverageAssessmentProp = any
+
 interface PolicyValidationCardProps {
   patientId: string
   payerName: string
   medicationName: string
+  coverageAssessment?: CoverageAssessmentProp
+}
+
+/** Map LLM criterion assessment to display status */
+function llmToDisplayStatus(assessment: { is_met?: boolean; confidence?: number }): 'met' | 'not_met' | 'partial' | 'pending' {
+  if (assessment.is_met === true) return 'met'
+  if (assessment.is_met === false) return 'not_met'
+  // is_met is undefined/null — AI hasn't determined; show as pending
+  return 'pending'
 }
 
 export function PolicyValidationCard({
   patientId,
   payerName,
   medicationName,
+  coverageAssessment,
 }: PolicyValidationCardProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['all']))
 
-  // Fetch patient data
+  // Fetch patient data (for indication matching display)
   const { data: patientData, isLoading: patientLoading } = usePatientData(patientId)
 
   // Fetch digitized policy - indefinite caching for static policy data
@@ -51,10 +68,28 @@ export function PolicyValidationCard({
     enabled: !!payerName && !!medicationName,
     staleTime: CACHE_TIMES.STATIC,
     gcTime: CACHE_TIMES.GC_TIME,
-    refetchOnMount: false,
+    refetchOnMount: true,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   })
+
+  // Build LLM assessment map: criterion_id -> assessment
+  const assessmentMap = useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const map: Record<string, any> = {}
+    const assessments = coverageAssessment?.criteria_assessments || coverageAssessment?.criteria_details
+    if (Array.isArray(assessments)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      assessments.forEach((a: any) => {
+        if (a.criterion_id) {
+          map[a.criterion_id] = a
+        }
+      })
+    }
+    return map
+  }, [coverageAssessment])
+
+  const hasLLMResults = Object.keys(assessmentMap).length > 0
 
   // Match patient diagnosis to policy indication
   const matchedIndication = useMemo(() => {
@@ -70,16 +105,14 @@ export function PolicyValidationCard({
           }
         }
       }
+      // Generic name-based matching
       const indicationNameLower = indication.indication_name?.toLowerCase() || ''
       for (const dx of patientData.diagnoses) {
         const dxDesc = dx.description?.toLowerCase() || ''
-        if (
-          indicationNameLower.includes('crohn') && dxDesc.includes('crohn') ||
-          indicationNameLower.includes('ulcerative colitis') && dxDesc.includes('ulcerative colitis') ||
-          indicationNameLower.includes('rheumatoid') && dxDesc.includes('rheumatoid') ||
-          indicationNameLower.includes('psoria') && dxDesc.includes('psoria') ||
-          indicationNameLower.includes('ankylosing') && dxDesc.includes('ankylosing')
-        ) {
+        if (indicationNameLower && dxDesc && (
+          dxDesc.includes(indicationNameLower) ||
+          indicationNameLower.includes(dxDesc.split(',')[0].trim())
+        )) {
           return indication
         }
       }
@@ -120,213 +153,28 @@ export function PolicyValidationCard({
     return groups
   }, [relevantCriteria])
 
-  // Evaluate criterion against patient data
-  const evaluateCriterion = (criterion: any): 'met' | 'not_met' | 'partial' | 'unknown' => {
-    if (!patientData) return 'unknown'
-
-    const criterionType = criterion.criterion_type
-    const criterionId = criterion.criterion_id?.toLowerCase() || ''
-
-    // Age criteria
-    if (criterionType === 'age') {
-      const patientAge = patientData.demographics?.age
-      if (!patientAge) return 'unknown'
-      const threshold = criterion.threshold_value
-      const operator = criterion.comparison_operator
-      if (operator === 'gte' && patientAge >= threshold) return 'met'
-      if (operator === 'gt' && patientAge > threshold) return 'met'
-      if (operator === 'lte' && patientAge <= threshold) return 'met'
-      if (operator === 'lt' && patientAge < threshold) return 'met'
-      if (operator === 'eq' && patientAge === threshold) return 'met'
-      return 'not_met'
-    }
-
-    // Diagnosis criteria
-    if (criterionType === 'diagnosis_confirmed') {
-      const diagnosisCodes = patientData.diagnoses?.map(d => d.icd10_code?.toUpperCase()) || []
-      const requiredCodes = criterion.clinical_codes?.map((c: any) => c.code?.toUpperCase()) || []
-      const hasMatch = requiredCodes.some((reqCode: string) =>
-        diagnosisCodes.some(patCode => patCode?.startsWith(reqCode?.split('.')[0]))
-      )
-      return hasMatch ? 'met' : 'not_met'
-    }
-
-    // Prescriber specialty criteria
-    if (criterionType === 'prescriber_specialty') {
-      const prescriberSpecialty = patientData.prescriber?.specialty?.toLowerCase() || ''
-      const allowedSpecialties = criterion.allowed_values?.map((v: string) => v.toLowerCase()) || []
-      if (criterionId.includes('gi') || criterionId.includes('gastro')) {
-        if (prescriberSpecialty.includes('gastro')) return 'met'
-      }
-      if (criterionId.includes('rheum')) {
-        if (prescriberSpecialty.includes('rheum')) return 'met'
-      }
-      if (criterionId.includes('derm')) {
-        if (prescriberSpecialty.includes('derm')) return 'met'
-      }
-      if (allowedSpecialties.some((s: string) => prescriberSpecialty.includes(s))) return 'met'
-      return prescriberSpecialty ? 'not_met' : 'unknown'
-    }
-
-    // Prior treatment criteria
-    if (criterionType === 'prior_treatment_tried' || criterionType === 'prior_treatment_failed') {
-      const priorTreatments = patientData.prior_treatments || []
-      const requiredDrugs = criterion.drug_names?.map((d: string) => d.toLowerCase()) || []
-      const requiredClasses = criterion.drug_classes?.map((c: string) => c.toLowerCase()) || []
-
-      const hasTried = priorTreatments.some(tx => {
-        const txName = tx.medication_name?.toLowerCase() || ''
-        const txClass = tx.drug_class?.toLowerCase() || ''
-        return requiredDrugs.some((d: string) => txName.includes(d)) ||
-               requiredClasses.some((c: string) => txClass.includes(c) || txName.includes(c))
-      })
-
-      if (criterionType === 'prior_treatment_failed') {
-        const hasFailed = priorTreatments.some(tx => {
-          const txName = tx.medication_name?.toLowerCase() || ''
-          const txClass = tx.drug_class?.toLowerCase() || ''
-          const outcome = tx.outcome?.toLowerCase() || ''
-          const matchesDrug = requiredDrugs.some((d: string) => txName.includes(d)) ||
-                             requiredClasses.some((c: string) => txClass.includes(c) || txName.includes(c))
-          return matchesDrug && (outcome.includes('inadequate') || outcome.includes('fail') || outcome.includes('intolerance'))
-        })
-        return hasFailed ? 'met' : hasTried ? 'partial' : 'unknown'
-      }
-
-      return hasTried ? 'met' : 'unknown'
-    }
-
-    // Safety screening criteria
-    if (criterionType === 'safety_screening_completed' || criterionType === 'safety_screening_negative') {
-      const screening = patientData.pre_biologic_screening
-      if (!screening) return 'unknown'
-
-      if (criterionId.includes('tb')) {
-        const tbScreening = screening.tuberculosis_screening || screening.tb_screening
-        if (tbScreening?.status === 'completed' || tbScreening?.status === 'COMPLETED') {
-          if (criterionType === 'safety_screening_negative') {
-            const result = tbScreening.result?.toLowerCase()
-            return result === 'negative' || result === 'not detected' ? 'met' : 'not_met'
-          }
-          return 'met'
-        }
-        if (tbScreening?.status === 'NOT_FOUND' || !tbScreening) {
-          return 'not_met'
-        }
-        return 'unknown'
-      }
-
-      if (criterionId.includes('hep_b') || criterionId.includes('hepatitis_b')) {
-        const hepBScreening = screening.hepatitis_b_screening
-        if (hepBScreening?.status === 'completed' || hepBScreening?.status === 'COMPLETED') {
-          return 'met'
-        }
-        if (hepBScreening?.status === 'NOT_FOUND' || !hepBScreening) {
-          return 'not_met'
-        }
-        return 'unknown'
-      }
-
-      if (criterionId.includes('hep_c') || criterionId.includes('hepatitis_c')) {
-        const hepCScreening = screening.hepatitis_c_screening
-        if (hepCScreening?.status === 'completed' || hepCScreening?.status === 'COMPLETED') {
-          return 'met'
-        }
-        if (hepCScreening?.status === 'NOT_FOUND' || !hepCScreening) {
-          return 'not_met'
-        }
-        return 'unknown'
-      }
-
-      return 'unknown'
-    }
-
-    // Clinical marker criteria
-    if (criterionType === 'clinical_marker_present') {
-      if (criterionId.includes('fistula')) {
-        const diagnosisCodes = patientData.diagnoses?.map(d => d.icd10_code?.toUpperCase()) || []
-        const diagnosisDescriptions = patientData.diagnoses?.map(d => d.description?.toLowerCase()) || []
-
-        const hasFistulaDiagnosis = diagnosisCodes.some(code =>
-          code?.includes('13') || code?.startsWith('K60')
-        ) || diagnosisDescriptions.some(desc => desc?.includes('fistula'))
-
-        const proceduresData = patientData.procedures
-        let hasFistulaProcedure = false
-
-        if (proceduresData) {
-          const procedureList = Array.isArray(proceduresData)
-            ? proceduresData
-            : Object.values(proceduresData)
-
-          hasFistulaProcedure = procedureList.some((proc: any) => {
-            if (!proc) return false
-            const findings = proc.findings || {}
-            if (findings.rectum?.fistula_observed) return true
-            if (findings.fistula_classification || findings.primary_tract) return true
-            if (proc.impression?.toLowerCase().includes('fistula')) return true
-            return false
-          })
-        }
-
-        const clinicalHistory = patientData.clinical_history
-        const hasFistulaHistory = clinicalHistory?.chief_complaint?.toLowerCase().includes('fistula') ||
-          clinicalHistory?.chief_complaint?.toLowerCase().includes('perianal')
-
-        if (hasFistulaDiagnosis || hasFistulaProcedure || hasFistulaHistory) {
-          return 'met'
-        }
-        return 'not_met'
-      }
-
-      if (criterionId.includes('resection')) {
-        const proceduresData = patientData.procedures
-        const surgicalHistory = patientData.clinical_history?.surgical_history || []
-
-        let hasResectionProcedure = false
-        if (proceduresData) {
-          const procedureList = Array.isArray(proceduresData)
-            ? proceduresData
-            : Object.values(proceduresData)
-
-          hasResectionProcedure = procedureList.some((proc: any) =>
-            proc?.procedure_name?.toLowerCase().includes('resection') ||
-            proc?.procedure_name?.toLowerCase().includes('ileocolectomy')
-          )
-        }
-
-        const hasResectionHistory = surgicalHistory.some((surg: any) =>
-          surg?.procedure?.toLowerCase().includes('resection') ||
-          surg?.procedure?.toLowerCase().includes('ileocolectomy')
-        )
-
-        return (hasResectionProcedure || hasResectionHistory) ? 'met' : 'not_met'
-      }
-
-      return 'unknown'
-    }
-
-    // Lab value criteria
-    if (criterionType === 'lab_value' || criterionType === 'lab_test_completed') {
-      if (!patientData.laboratory_results) return 'unknown'
-      return 'partial'
-    }
-
-    return 'unknown'
+  // Get status for a criterion from LLM results
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const getCriterionStatus = (criterion: any): 'met' | 'not_met' | 'partial' | 'pending' => {
+    if (!hasLLMResults) return 'pending'
+    const assessment = assessmentMap[criterion.criterion_id]
+    if (!assessment) return 'pending'
+    return llmToDisplayStatus(assessment)
   }
 
   // Count status totals
   const statusCounts = useMemo(() => {
-    let met = 0, notMet = 0, partial = 0, unknown = 0
+    let met = 0, notMet = 0, partial = 0, pending = 0
     relevantCriteria.forEach(c => {
-      const status = evaluateCriterion(c)
+      const status = getCriterionStatus(c)
       if (status === 'met') met++
       else if (status === 'not_met') notMet++
       else if (status === 'partial') partial++
-      else unknown++
+      else pending++
     })
-    return { met, notMet, partial, unknown, total: relevantCriteria.length }
-  }, [relevantCriteria, patientData])
+    return { met, notMet, partial, pending, total: relevantCriteria.length }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [relevantCriteria, assessmentMap, hasLLMResults])
 
   const toggleCategory = (category: string) => {
     setExpandedCategories(prev => {
@@ -424,6 +272,19 @@ export function PolicyValidationCard({
         </div>
       </div>
 
+      {/* Pending AI Analysis banner */}
+      {!hasLLMResults && (
+        <div className="p-4 rounded-xl bg-grey-100 border border-grey-200">
+          <div className="flex items-center gap-3">
+            <Clock className="w-5 h-5 text-grey-400" />
+            <div>
+              <h4 className="text-sm font-semibold text-grey-700">Pending AI Analysis</h4>
+              <p className="text-xs text-grey-500 mt-0.5">Criteria evaluations will appear after AI policy analysis completes.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Criteria Status Summary */}
       <div className="grid grid-cols-4 gap-3">
         <div className="bg-grey-50 rounded-lg p-3 text-center">
@@ -439,8 +300,8 @@ export function PolicyValidationCard({
           <p className="text-xs text-grey-500">Not Met</p>
         </div>
         <div className="bg-grey-50 rounded-lg p-3 text-center">
-          <p className="text-2xl font-semibold text-grey-900">{statusCounts.unknown}</p>
-          <p className="text-xs text-grey-500">Unknown</p>
+          <p className="text-2xl font-semibold text-grey-900">{statusCounts.pending}</p>
+          <p className="text-xs text-grey-500">{hasLLMResults ? 'Unknown' : 'Pending'}</p>
         </div>
       </div>
 
@@ -448,7 +309,7 @@ export function PolicyValidationCard({
       <div className="space-y-3">
         {Object.entries(groupedCriteria).map(([category, criteria]) => {
           const isExpanded = expandedCategories.has('all') || expandedCategories.has(category)
-          const categoryMet = criteria.filter(c => evaluateCriterion(c) === 'met').length
+          const categoryMet = criteria.filter(c => getCriterionStatus(c) === 'met').length
           const categoryTotal = criteria.length
 
           const isOrLogic = category === 'step_therapy'
@@ -486,7 +347,7 @@ export function PolicyValidationCard({
                   <span className="text-xs font-medium text-grey-500">
                     {categoryMet}/{categoryTotal} met
                   </span>
-                  {categoryStatus === 'satisfied' && (
+                  {categoryStatus === 'satisfied' && hasLLMResults && (
                     <CheckCircle className="w-4 h-4 text-grey-900" />
                   )}
                 </div>
@@ -496,15 +357,16 @@ export function PolicyValidationCard({
               {isExpanded && (
                 <div className="divide-y divide-grey-100">
                   {criteria.map((criterion, idx) => {
-                    const status = evaluateCriterion(criterion)
-                    const isRequired = criterion.is_required !== false // Default to required if not specified
+                    const status = getCriterionStatus(criterion)
+                    const isRequired = criterion.is_required !== false
+                    const llmAssessment = assessmentMap[criterion.criterion_id]
                     return (
                       <div key={idx} className="px-4 py-3 flex items-start gap-3">
                         <div className="mt-0.5">
                           {status === 'met' && <CheckCircle className="w-4 h-4 text-grey-900" />}
                           {status === 'not_met' && <XCircle className={cn("w-4 h-4", isRequired ? "text-red-500" : "text-grey-400")} />}
                           {status === 'partial' && <MinusCircle className="w-4 h-4 text-amber-500" />}
-                          {status === 'unknown' && <Circle className="w-4 h-4 text-grey-300" />}
+                          {status === 'pending' && <Circle className="w-4 h-4 text-grey-300" />}
                         </div>
 
                         <div className="flex-1 min-w-0">
@@ -515,7 +377,28 @@ export function PolicyValidationCard({
                             {criterion.name}
                           </p>
                           <p className="text-xs text-grey-500 mt-0.5">{criterion.description}</p>
-                          {criterion.policy_text && criterion.policy_text !== criterion.description && (
+
+                          {/* LLM reasoning and evidence */}
+                          {llmAssessment?.reasoning && (
+                            <p className="text-xs text-grey-600 mt-1.5 bg-grey-50 rounded px-2 py-1">
+                              {llmAssessment.reasoning}
+                            </p>
+                          )}
+                          {llmAssessment?.supporting_evidence?.length > 0 && (
+                            <div className="mt-1.5">
+                              <p className="text-[10px] font-medium text-grey-400 uppercase">Evidence</p>
+                              <ul className="mt-0.5 space-y-0.5">
+                                {llmAssessment.supporting_evidence.map((ev: string, evIdx: number) => (
+                                  <li key={evIdx} className="text-xs text-grey-500 flex items-start gap-1">
+                                    <span className="text-grey-300 mt-0.5">-</span>
+                                    {ev}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {criterion.policy_text && criterion.policy_text !== criterion.description && !llmAssessment && (
                             <p className="text-xs text-grey-400 mt-1 italic">"{criterion.policy_text}"</p>
                           )}
                           {criterion.clinical_codes?.length > 0 && (
@@ -532,16 +415,23 @@ export function PolicyValidationCard({
                           )}
                         </div>
 
-                        <span className={cn(
-                          "px-2 py-0.5 text-xs font-medium rounded flex-shrink-0",
-                          status === 'met' && 'bg-grey-900 text-white',
-                          status === 'not_met' && isRequired && 'bg-red-100 text-red-700',
-                          status === 'not_met' && !isRequired && 'bg-grey-200 text-grey-600',
-                          status === 'partial' && 'bg-amber-100 text-amber-700',
-                          status === 'unknown' && 'bg-grey-100 text-grey-500'
-                        )}>
-                          {status === 'met' ? 'Met' : status === 'not_met' ? 'Not Met' : status === 'partial' ? 'Partial' : 'Unknown'}
-                        </span>
+                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                          <span className={cn(
+                            "px-2 py-0.5 text-xs font-medium rounded",
+                            status === 'met' && 'bg-grey-900 text-white',
+                            status === 'not_met' && isRequired && 'bg-red-100 text-red-700',
+                            status === 'not_met' && !isRequired && 'bg-grey-200 text-grey-600',
+                            status === 'partial' && 'bg-amber-100 text-amber-700',
+                            status === 'pending' && 'bg-grey-100 text-grey-500'
+                          )}>
+                            {status === 'met' ? 'Met' : status === 'not_met' ? 'Not Met' : status === 'partial' ? 'Partial' : 'Pending'}
+                          </span>
+                          {llmAssessment?.confidence != null && (
+                            <span className="text-[10px] text-grey-400">
+                              {Math.round(llmAssessment.confidence * 100)}% conf
+                            </span>
+                          )}
+                        </div>
                       </div>
                     )
                   })}

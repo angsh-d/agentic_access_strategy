@@ -1,6 +1,6 @@
 """Action models for tracking system actions and results."""
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from uuid import uuid4
 
@@ -27,7 +27,7 @@ class ActionRequest(BaseModel):
     depends_on: List[str] = Field(default_factory=list, description="Action IDs this depends on")
 
     # Metadata
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     created_by: str = Field(default="system", description="Who/what created this action")
 
 
@@ -39,7 +39,7 @@ class ActionResult(BaseModel):
     case_id: str = Field(..., description="Case this action belongs to")
 
     # Execution details
-    started_at: datetime = Field(default_factory=datetime.utcnow)
+    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: Optional[datetime] = Field(default=None)
     duration_seconds: Optional[float] = Field(default=None)
 
@@ -70,7 +70,7 @@ class ActionResult(BaseModel):
 
     def mark_completed(self, success: bool, response_data: Optional[Dict[str, Any]] = None):
         """Mark the action as completed."""
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         self.success = success
         if response_data:
             self.response_data = response_data

@@ -107,38 +107,66 @@ class MCPClient:
             params=params
         )
 
-        try:
-            if method.upper() == "GET":
-                response = await self._http_client.get(
-                    url,
-                    params=params,
-                    timeout=config.timeout
+        last_error = None
+        for attempt in range(1, config.retry_count + 1):
+            try:
+                if method.upper() == "GET":
+                    response = await self._http_client.get(
+                        url,
+                        params=params,
+                        timeout=config.timeout
+                    )
+                else:
+                    response = await self._http_client.post(
+                        url,
+                        json=params,
+                        timeout=config.timeout
+                    )
+
+                response.raise_for_status()
+                return response.json()
+
+            except httpx.HTTPStatusError as e:
+                last_error = e
+                # Don't retry client errors (4xx)
+                if 400 <= e.response.status_code < 500:
+                    logger.error(
+                        "MCP call HTTP error (not retrying)",
+                        server=server,
+                        status=e.response.status_code,
+                        error=str(e)
+                    )
+                    raise
+                logger.warning(
+                    "MCP call HTTP error (retrying)",
+                    server=server,
+                    status=e.response.status_code,
+                    attempt=attempt,
+                    max_attempts=config.retry_count
                 )
-            else:
-                response = await self._http_client.post(
-                    url,
-                    json=params,
-                    timeout=config.timeout
+            except httpx.RequestError as e:
+                last_error = e
+                logger.warning(
+                    "MCP call request error (retrying)",
+                    server=server,
+                    attempt=attempt,
+                    max_attempts=config.retry_count,
+                    error=str(e)
                 )
 
-            response.raise_for_status()
-            return response.json()
+            # Wait before retry with exponential backoff
+            if attempt < config.retry_count:
+                import asyncio
+                await asyncio.sleep(min(2 ** (attempt - 1), 8))
 
-        except httpx.HTTPStatusError as e:
-            logger.error(
-                "MCP call HTTP error",
-                server=server,
-                status=e.response.status_code,
-                error=str(e)
-            )
-            raise
-        except httpx.RequestError as e:
-            logger.error(
-                "MCP call request error",
-                server=server,
-                error=str(e)
-            )
-            raise
+        # All retries exhausted
+        logger.error(
+            "MCP call failed after all retries",
+            server=server,
+            endpoint=endpoint,
+            attempts=config.retry_count
+        )
+        raise last_error
 
     async def close(self):
         """Close the HTTP client."""

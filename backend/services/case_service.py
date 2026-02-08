@@ -1,6 +1,7 @@
 """Case service for managing PA cases."""
 from typing import Dict, Any, List, Optional
-from datetime import datetime, date
+from datetime import datetime, date, timezone
+from enum import Enum
 import json
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +20,7 @@ def serialize_for_json(obj: Any) -> Any:
         return {k: serialize_for_json(v) for k, v in obj.items()}
     elif isinstance(obj, list):
         return [serialize_for_json(item) for item in obj]
-    elif hasattr(obj, 'value'):  # Enum
+    elif isinstance(obj, Enum):
         return obj.value
     elif hasattr(obj, 'model_dump'):  # Pydantic model
         return serialize_for_json(obj.model_dump())
@@ -141,6 +142,18 @@ class CaseService:
         """
         cases = await self.repository.get_all(stage=stage, limit=limit, offset=offset)
         return [c.to_dict() for c in cases]
+
+    async def count_cases(self, stage: Optional[CaseStage] = None) -> int:
+        """
+        Count total cases with optional stage filter.
+
+        Args:
+            stage: Optional stage filter
+
+        Returns:
+            Total count of matching cases
+        """
+        return await self.repository.count(stage=stage)
 
     async def process_case(self, case_id: str) -> Dict[str, Any]:
         """
@@ -995,7 +1008,7 @@ class CaseService:
             "action": human_decision.action.value,
             "reviewer_id": human_decision.reviewer_id,
             "reviewer_name": human_decision.reviewer_name,
-            "timestamp": human_decision.timestamp.isoformat() if human_decision.timestamp else datetime.utcnow().isoformat(),
+            "timestamp": human_decision.timestamp.isoformat() if human_decision.timestamp else datetime.now(timezone.utc).isoformat(),
             "original_recommendation": human_decision.original_recommendation,
             "override_reason": human_decision.override_reason,
             "notes": human_decision.notes
@@ -1090,7 +1103,7 @@ class CaseService:
         appeal_deadline = None
         if decision == "denied":
             from datetime import timedelta
-            appeal_deadline = (datetime.utcnow() + timedelta(days=30)).strftime("%B %d, %Y")
+            appeal_deadline = (datetime.now(timezone.utc) + timedelta(days=30)).strftime("%B %d, %Y")
 
         # Write notification letter
         notification_path = self.waypoint_writer.write_notification_letter(

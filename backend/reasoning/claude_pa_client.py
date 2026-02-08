@@ -31,7 +31,7 @@ class ClaudePAClient:
         settings = get_settings()
         self.client = anthropic.AsyncAnthropic(
             api_key=settings.anthropic_api_key,
-            timeout=60.0
+            timeout=180.0
         )
         self.model = settings.claude_model
         self.max_tokens = settings.claude_max_output_tokens
@@ -88,6 +88,9 @@ class ClaudePAClient:
                 system=system_prompt or default_system,
                 prompt=prompt
             )
+
+            if not message.content:
+                raise ClaudePolicyReasoningError("Empty response from Claude (no content blocks)")
 
             response_text = message.content[0].text
             logger.debug("Claude response received", length=len(response_text))
@@ -161,7 +164,7 @@ class ClaudePAClient:
                 max_tokens=10,
                 messages=[{"role": "user", "content": "Reply with 'ok'"}]
             )
-            return "ok" in message.content[0].text.lower()
+            return bool(message.content) and "ok" in message.content[0].text.lower()
         except Exception as e:
             logger.error("Claude health check failed", error=str(e))
             return False

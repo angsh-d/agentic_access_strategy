@@ -1,4 +1,7 @@
 """LLM Gateway for task-based model routing."""
+import json
+import math
+from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 from backend.models.enums import TaskCategory, LLMProvider
@@ -9,17 +12,52 @@ from backend.reasoning.openai_client import AzureOpenAIClient, AzureOpenAIError
 
 logger = get_logger(__name__)
 
-
-# Task to model routing configuration
-# Claude is preferred for clinical reasoning tasks; Gemini/Azure for general tasks
-TASK_MODEL_ROUTING: Dict[TaskCategory, List[LLMProvider]] = {
-    TaskCategory.POLICY_REASONING: [LLMProvider.CLAUDE],  # Claude ONLY - no fallback for clinical accuracy
-    TaskCategory.APPEAL_STRATEGY: [LLMProvider.CLAUDE],  # Claude ONLY - no fallback for clinical accuracy
-    TaskCategory.APPEAL_DRAFTING: [LLMProvider.GEMINI, LLMProvider.AZURE_OPENAI],
-    TaskCategory.SUMMARY_GENERATION: [LLMProvider.GEMINI, LLMProvider.AZURE_OPENAI],
-    TaskCategory.DATA_EXTRACTION: [LLMProvider.GEMINI, LLMProvider.AZURE_OPENAI],
-    TaskCategory.NOTIFICATION: [LLMProvider.GEMINI, LLMProvider.AZURE_OPENAI],
+# Provider name → enum mapping
+_PROVIDER_MAP = {
+    "claude": LLMProvider.CLAUDE,
+    "gemini": LLMProvider.GEMINI,
+    "azure_openai": LLMProvider.AZURE_OPENAI,
 }
+
+# Task category name → enum mapping
+_TASK_MAP = {cat.value: cat for cat in TaskCategory}
+
+
+def _load_task_model_routing() -> Dict[TaskCategory, List[LLMProvider]]:
+    """Load task-to-model routing from config file.
+
+    Falls back to default Claude-first clinical routing if config unavailable.
+    """
+    config_path = Path("data/config/llm_routing.json")
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        routing = {}
+        for task_name, providers in data.get("routing", {}).items():
+            task_cat = _TASK_MAP.get(task_name)
+            if task_cat is None:
+                logger.warning("Unknown task category in routing config", task=task_name)
+                continue
+            provider_list = [_PROVIDER_MAP[p] for p in providers if p in _PROVIDER_MAP]
+            if provider_list:
+                routing[task_cat] = provider_list
+        logger.info("LLM routing loaded from config", tasks=len(routing))
+        return routing
+    except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+        logger.warning("Could not load LLM routing config, using defaults", error=str(e))
+        return {
+            TaskCategory.POLICY_REASONING: [LLMProvider.CLAUDE, LLMProvider.AZURE_OPENAI],
+            TaskCategory.APPEAL_STRATEGY: [LLMProvider.CLAUDE, LLMProvider.AZURE_OPENAI],
+            TaskCategory.APPEAL_DRAFTING: [LLMProvider.GEMINI, LLMProvider.AZURE_OPENAI],
+            TaskCategory.SUMMARY_GENERATION: [LLMProvider.GEMINI, LLMProvider.AZURE_OPENAI],
+            TaskCategory.DATA_EXTRACTION: [LLMProvider.GEMINI, LLMProvider.AZURE_OPENAI],
+            TaskCategory.NOTIFICATION: [LLMProvider.GEMINI, LLMProvider.AZURE_OPENAI],
+            TaskCategory.POLICY_QA: [LLMProvider.CLAUDE],
+        }
+
+
+# Task to model routing — loaded from data/config/llm_routing.json
+TASK_MODEL_ROUTING = _load_task_model_routing()
 
 
 class LLMGatewayError(Exception):
@@ -32,8 +70,8 @@ class LLMGateway:
     Central gateway for LLM requests with task-based routing.
 
     Routes requests to appropriate models based on task category:
-    - Policy reasoning → Claude (preferred for clinical accuracy)
-    - Appeal strategy → Claude (preferred for clinical accuracy)
+    - Policy reasoning → Claude (primary) → Azure OpenAI (fallback)
+    - Appeal strategy → Claude (primary) → Azure OpenAI (fallback)
     - General tasks → Gemini (primary) → Azure OpenAI (fallback)
     """
 
@@ -87,8 +125,7 @@ class LLMGateway:
             Generated response with metadata
 
         Raises:
-            LLMGatewayError: If all configured models fail
-            ClaudePolicyReasoningError: If policy reasoning fails (no fallback)
+            LLMGatewayError: If all configured providers fail for the task
         """
         providers = TASK_MODEL_ROUTING.get(task_category, [LLMProvider.GEMINI, LLMProvider.AZURE_OPENAI])
 
@@ -113,11 +150,7 @@ class LLMGateway:
                 result["task_category"] = task_category.value
                 return result
 
-            except ClaudePolicyReasoningError:
-                # CRITICAL: No fallback for clinical reasoning - propagate immediately
-                raise
-
-            except (GeminiError, AzureOpenAIError) as e:
+            except (ClaudePolicyReasoningError, GeminiError, AzureOpenAIError) as e:
                 last_error = e
                 logger.warning(
                     "Provider failed, trying fallback",
@@ -264,6 +297,18 @@ class LLMGateway:
             response_format="text"
         )
         return result.get("response", "")
+
+    async def embed(self, text: str, task_type: str = "SEMANTIC_SIMILARITY") -> List[float]:
+        """Generate an embedding vector via Gemini embedding model."""
+        return await self.gemini_client.embed(text, task_type=task_type)
+
+    @staticmethod
+    def cosine_similarity(a: List[float], b: List[float]) -> float:
+        """Compute cosine similarity between two vectors."""
+        dot = sum(x * y for x, y in zip(a, b))
+        norm_a = math.sqrt(sum(x * x for x in a))
+        norm_b = math.sqrt(sum(x * x for x in b))
+        return dot / (norm_a * norm_b) if norm_a and norm_b else 0.0
 
     async def health_check(self) -> Dict[str, bool]:
         """Check health of all providers."""

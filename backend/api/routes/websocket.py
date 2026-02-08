@@ -1,13 +1,15 @@
 """WebSocket routes for real-time updates."""
 import asyncio
 import json
-from datetime import datetime
-from typing import Dict, Set
+from collections import deque
+from datetime import datetime, timezone
+from typing import Dict, List, Set, Optional
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 
 from backend.orchestrator.case_orchestrator import get_case_orchestrator
 from backend.agents.intake_agent import get_intake_agent
+from backend.config.settings import get_settings
 from backend.config.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -55,8 +57,97 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+class NotificationManager:
+    """Manages system-wide notification WebSocket connections."""
+
+    def __init__(self):
+        self._connections: Set[WebSocket] = set()
+        self._recent: deque = deque(maxlen=10)
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self._connections.add(websocket)
+        logger.info("Notification client connected", total=len(self._connections))
+
+    def disconnect(self, websocket: WebSocket):
+        self._connections.discard(websocket)
+        logger.info("Notification client disconnected", total=len(self._connections))
+
+    async def broadcast_notification(self, notification: dict):
+        """Broadcast a notification to all connected clients."""
+        message = {
+            **notification,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        self._recent.append(message)
+
+        disconnected: Set[WebSocket] = set()
+        for ws in self._connections:
+            try:
+                await ws.send_json(message)
+            except Exception:
+                disconnected.add(ws)
+
+        for ws in disconnected:
+            self._connections.discard(ws)
+
+    @property
+    def recent_notifications(self) -> List[dict]:
+        return list(self._recent)
+
+
+_notification_manager: Optional[NotificationManager] = None
+
+
+def get_notification_manager() -> NotificationManager:
+    """Get or create the global NotificationManager."""
+    global _notification_manager
+    if _notification_manager is None:
+        _notification_manager = NotificationManager()
+    return _notification_manager
+
+
+async def _validate_ws_token(websocket: WebSocket, token: Optional[str]) -> bool:
+    """
+    Validate WebSocket connection token.
+
+    In development mode, accepts any connection for ease of testing.
+    In production, requires a valid token query parameter.
+
+    Args:
+        websocket: The WebSocket connection
+        token: Token from query parameter
+
+    Returns:
+        True if valid, False if rejected
+    """
+    settings = get_settings()
+
+    # In development mode, allow unauthenticated connections
+    if settings.app_env == "development":
+        return True
+
+    if not token:
+        await websocket.close(code=4001, reason="Authentication required: provide ?token= query parameter")
+        logger.warning("WebSocket rejected: no token provided")
+        return False
+
+    # Validate token against configured WebSocket secret
+    ws_secret = getattr(settings, "websocket_auth_token", None)
+    if ws_secret and token != ws_secret:
+        await websocket.close(code=4003, reason="Invalid authentication token")
+        logger.warning("WebSocket rejected: invalid token")
+        return False
+
+    return True
+
+
 @router.websocket("/ws/cases/{case_id}")
-async def websocket_case_updates(websocket: WebSocket, case_id: str):
+async def websocket_case_updates(
+    websocket: WebSocket,
+    case_id: str,
+    token: Optional[str] = Query(default=None),
+):
     """
     WebSocket endpoint for real-time case updates.
 
@@ -65,7 +156,11 @@ async def websocket_case_updates(websocket: WebSocket, case_id: str):
     Args:
         websocket: WebSocket connection
         case_id: Case ID to subscribe to
+        token: Optional authentication token
     """
+    if not await _validate_ws_token(websocket, token):
+        return
+
     await manager.connect(websocket, case_id)
 
     try:
@@ -73,7 +168,7 @@ async def websocket_case_updates(websocket: WebSocket, case_id: str):
         await websocket.send_json({
             "event": "connected",
             "case_id": case_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "message": f"Connected to case {case_id} updates"
         })
 
@@ -93,7 +188,7 @@ async def websocket_case_updates(websocket: WebSocket, case_id: str):
                 # Send heartbeat
                 await websocket.send_json({
                     "event": "heartbeat",
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 })
 
     except WebSocketDisconnect:
@@ -116,7 +211,7 @@ async def handle_websocket_message(websocket: WebSocket, case_id: str, message: 
         await websocket.send_json({
             "event": "status",
             "case_id": case_id,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
 
     else:
@@ -133,26 +228,23 @@ async def stream_case_processing(websocket: WebSocket, case_id: str, options: di
     await websocket.send_json({
         "event": "processing_started",
         "case_id": case_id,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     })
 
     try:
-        # Get patient data
-        from backend.storage.database import get_db
-        from backend.storage.case_repository import CaseRepository
+        # Get patient data through service layer
+        from backend.api.dependencies import get_case_service
 
-        async with get_db() as session:
-            repo = CaseRepository(session)
-            case = await repo.get_by_id(case_id)
-
-            if not case:
+        case_state = None
+        async for case_service in get_case_service():
+            case_state_obj = await case_service.get_case_state(case_id)
+            if not case_state_obj:
                 await websocket.send_json({
                     "event": "error",
                     "message": f"Case not found: {case_id}"
                 })
                 return
-
-            case_state = repo.to_case_state(case)
+            case_state = case_state_obj
 
         # Load patient data
         intake_agent = get_intake_agent()
@@ -194,7 +286,7 @@ async def stream_case_processing(websocket: WebSocket, case_id: str, options: di
                 "stage": stage,
                 "previous_stage": event.get("previous_stage", {}).value if hasattr(event.get("previous_stage"), "value") else event.get("previous_stage"),
                 "messages": event.get("messages", []),
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             })
 
             # Also broadcast to other connections
@@ -202,13 +294,13 @@ async def stream_case_processing(websocket: WebSocket, case_id: str, options: di
                 "event": "stage_update",
                 "case_id": case_id,
                 "stage": stage,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             })
 
         await websocket.send_json({
             "event": "processing_completed",
             "case_id": case_id,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
 
     except Exception as e:
@@ -217,39 +309,53 @@ async def stream_case_processing(websocket: WebSocket, case_id: str, options: di
             "event": "processing_error",
             "case_id": case_id,
             "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
 
 
 @router.websocket("/ws/notifications")
-async def websocket_notifications(websocket: WebSocket):
+async def websocket_notifications(
+    websocket: WebSocket,
+    token: Optional[str] = Query(default=None),
+):
     """
     WebSocket endpoint for system-wide notifications.
 
-    Streams notifications across all cases.
+    Streams policy update notifications and other system events.
+
+    Args:
+        websocket: WebSocket connection
+        token: Optional authentication token
     """
-    await websocket.accept()
+    if not await _validate_ws_token(websocket, token):
+        return
+
+    notif_mgr = get_notification_manager()
+    await notif_mgr.connect(websocket)
 
     try:
+        # Send connection confirmation + any missed notifications
         await websocket.send_json({
             "event": "connected",
             "scope": "notifications",
-            "timestamp": datetime.utcnow().isoformat()
+            "recent": notif_mgr.recent_notifications,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
         while True:
             try:
                 await asyncio.wait_for(
                     websocket.receive_text(),
-                    timeout=30.0
+                    timeout=30.0,
                 )
             except asyncio.TimeoutError:
                 await websocket.send_json({
                     "event": "heartbeat",
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 })
 
     except WebSocketDisconnect:
-        logger.info("Notifications WebSocket disconnected")
+        notif_mgr.disconnect(websocket)
     except Exception as e:
         logger.error("Notifications WebSocket error", error=str(e))
+        notif_mgr.disconnect(websocket)

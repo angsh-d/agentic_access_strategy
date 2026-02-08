@@ -216,6 +216,18 @@ class StrategyScorer:
                 f"Adjusted for {first_payer} approval likelihood: {assessment.approval_likelihood:.2f}"
             )
 
+            # Hard floor: approval_score should never exceed likelihood * 10
+            # This prevents a base score of 7.0 staying high when likelihood is 0.15
+            likelihood_ceiling = assessment.approval_likelihood * 10.0
+            if approval_score > likelihood_ceiling + 1.0:
+                old_score = approval_score
+                approval_score = likelihood_ceiling + 1.0
+                adjustments["likelihood_ceiling"] = approval_score - old_score
+                adjustment_reasoning.append(
+                    f"Approval score capped to {approval_score:.1f} — "
+                    f"cannot exceed likelihood ceiling ({assessment.approval_likelihood:.2f})"
+                )
+
             # Adjust for documentation gaps
             critical_gaps = len(assessment.get_critical_gaps())
             if critical_gaps > 0:
@@ -226,14 +238,9 @@ class StrategyScorer:
                     f"Penalty for {critical_gaps} critical documentation gap(s)"
                 )
 
-            # Adjust for step therapy — prefer evaluator data if available
+            # Adjust for step therapy — uses LLM assessment values
             step_therapy_required = assessment.step_therapy_required
             step_therapy_satisfied = assessment.step_therapy_satisfied
-            if hasattr(assessment, 'llm_raw_response') and assessment.llm_raw_response:
-                eval_data = assessment.llm_raw_response.get("_evaluator_step_therapy")
-                if eval_data is not None:
-                    step_therapy_required = eval_data.get("required", step_therapy_required)
-                    step_therapy_satisfied = eval_data.get("satisfied", step_therapy_satisfied)
 
             if step_therapy_required and not step_therapy_satisfied:
                 approval_score = max(0.0, approval_score - 2.0)

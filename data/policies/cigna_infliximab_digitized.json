@@ -1593,7 +1593,7 @@
         "DIAG_AS",
         "PRESCRIBER_RHEUM"
       ],
-      "subgroups": [],
+      "subgroups": ["GRP_SAFETY_SCREENING_BIOLOGIC"],
       "negated": false
     },
     "GRP_AS_CONTINUATION": {
@@ -1688,7 +1688,8 @@
         "PRESCRIBER_DERM"
       ],
       "subgroups": [
-        "GRP_PSO_STEP_THERAPY"
+        "GRP_PSO_STEP_THERAPY",
+        "GRP_SAFETY_SCREENING_BIOLOGIC"
       ],
       "negated": false
     },
@@ -1729,7 +1730,8 @@
         "DIAG_PSA"
       ],
       "subgroups": [
-        "GRP_PRESCRIBER_RHEUM_DERM"
+        "GRP_PRESCRIBER_RHEUM_DERM",
+        "GRP_SAFETY_SCREENING_BIOLOGIC"
       ],
       "negated": false
     },
@@ -1769,7 +1771,8 @@
         "PRESCRIBER_RHEUM"
       ],
       "subgroups": [
-        "GRP_RA_STEP_THERAPY"
+        "GRP_RA_STEP_THERAPY",
+        "GRP_SAFETY_SCREENING_BIOLOGIC"
       ],
       "negated": false
     },
@@ -1808,7 +1811,7 @@
         "DIAG_UC",
         "PRESCRIBER_GI"
       ],
-      "subgroups": [],
+      "subgroups": ["GRP_SAFETY_SCREENING_BIOLOGIC"],
       "negated": false
     },
     "GRP_UC_CONTINUATION": {
@@ -1835,7 +1838,8 @@
         "PRESCRIBER_MULTI_SPECIALTY_BEHCETS"
       ],
       "subgroups": [
-        "GRP_BEHCETS_STEP"
+        "GRP_BEHCETS_STEP",
+        "GRP_SAFETY_SCREENING_BIOLOGIC"
       ],
       "negated": false
     },
@@ -1876,7 +1880,7 @@
         "STEP_GVHD_SYSTEMIC",
         "PRESCRIBER_ONC_HEM_TRANSPLANT"
       ],
-      "subgroups": [],
+      "subgroups": ["GRP_SAFETY_SCREENING_BIOLOGIC"],
       "negated": false
     },
     "GRP_GVHD_CONTINUATION": {
@@ -1903,7 +1907,7 @@
         "STEP_HS_THERAPY",
         "PRESCRIBER_DERM"
       ],
-      "subgroups": [],
+      "subgroups": ["GRP_SAFETY_SCREENING_BIOLOGIC"],
       "negated": false
     },
     "GRP_HS_CONTINUATION": {
@@ -1930,7 +1934,7 @@
         "STEP_IMMUNO_STEROID",
         "PRESCRIBER_MULTI_SPECIALTY_IMMUNO"
       ],
-      "subgroups": [],
+      "subgroups": ["GRP_SAFETY_SCREENING_BIOLOGIC"],
       "negated": false
     },
     "GRP_IMMUNO_CONTINUATION": {
@@ -1959,7 +1963,7 @@
         "STEP_IC_IMMUNOSUPPRESSANT",
         "PRESCRIBER_GI"
       ],
-      "subgroups": [],
+      "subgroups": ["GRP_SAFETY_SCREENING_BIOLOGIC"],
       "negated": false
     },
     "GRP_IC_CONTINUATION": {
@@ -1986,7 +1990,8 @@
         "PRESCRIBER_RHEUM"
       ],
       "subgroups": [
-        "GRP_JIA_STEP"
+        "GRP_JIA_STEP",
+        "GRP_SAFETY_SCREENING_BIOLOGIC"
       ],
       "negated": false
     },
@@ -2027,7 +2032,8 @@
         "PRESCRIBER_DERM"
       ],
       "subgroups": [
-        "GRP_PYODERMA_STEP"
+        "GRP_PYODERMA_STEP",
+        "GRP_SAFETY_SCREENING_BIOLOGIC"
       ],
       "negated": false
     },
@@ -2068,7 +2074,7 @@
         "STEP_SARCOID_IMMUNO",
         "PRESCRIBER_MULTI_SPECIALTY_SARCOID"
       ],
-      "subgroups": [],
+      "subgroups": ["GRP_SAFETY_SCREENING_BIOLOGIC"],
       "negated": false
     },
     "GRP_SARCOID_CONTINUATION": {
@@ -2095,7 +2101,7 @@
         "STEP_SCLERITIS_THERAPY",
         "PRESCRIBER_OPHTH"
       ],
-      "subgroups": [],
+      "subgroups": ["GRP_SAFETY_SCREENING_BIOLOGIC"],
       "negated": false
     },
     "GRP_SCLERITIS_CONTINUATION": {
@@ -2122,7 +2128,8 @@
         "PRESCRIBER_RHEUM"
       ],
       "subgroups": [
-        "GRP_SPA_OTHER_STEP"
+        "GRP_SPA_OTHER_STEP",
+        "GRP_SAFETY_SCREENING_BIOLOGIC"
       ],
       "negated": false
     },
@@ -2163,7 +2170,7 @@
         "STEP_STILLS_DMARD",
         "PRESCRIBER_RHEUM"
       ],
-      "subgroups": [],
+      "subgroups": ["GRP_SAFETY_SCREENING_BIOLOGIC"],
       "negated": false
     },
     "GRP_STILLS_CONTINUATION": {
@@ -2190,7 +2197,7 @@
         "STEP_UVEITIS_THERAPY",
         "PRESCRIBER_OPHTH"
       ],
-      "subgroups": [],
+      "subgroups": ["GRP_SAFETY_SCREENING_BIOLOGIC"],
       "negated": false
     },
     "GRP_UVEITIS_CONTINUATION": {
@@ -2277,6 +2284,21 @@
           "system": "ICD-10",
           "code": "K50.9",
           "display": "Crohn's disease, unspecified"
+        },
+        {
+          "system": "ICD-10",
+          "code": "K50.013",
+          "display": "Crohn's disease of small intestine with fistula"
+        },
+        {
+          "system": "ICD-10",
+          "code": "K50.113",
+          "display": "Crohn's disease of large intestine with fistula"
+        },
+        {
+          "system": "ICD-10",
+          "code": "K50.813",
+          "display": "Crohn's disease of both small and large intestine with fistula"
         },
         {
           "system": "ICD-10",
@@ -3024,8 +3046,8 @@
       "minimum_trials": 1,
       "minimum_duration_days": 90,
       "failure_required": false,
-      "intolerance_acceptable": false,
-      "contraindication_acceptable": false,
+      "intolerance_acceptable": true,
+      "contraindication_acceptable": true,
       "documentation_requirements": [
         "prescription records"
       ]

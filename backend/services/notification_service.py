@@ -1,6 +1,6 @@
 """Notification service for alerts and communications."""
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from backend.models.enums import TaskCategory
@@ -69,12 +69,12 @@ class NotificationService:
         )
 
         notification = {
-            "id": f"NOTIF-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+            "id": f"NOTIF-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
             "type": notification_type.value,
             "recipient_type": recipient_type,
             "case_id": case_id,
             "content": content.get("response", ""),
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "status": "pending",
             "context": context
         }
@@ -104,7 +104,7 @@ class NotificationService:
 
         # Simulate sending
         notification["status"] = "sent"
-        notification["sent_at"] = datetime.utcnow().isoformat()
+        notification["sent_at"] = datetime.now(timezone.utc).isoformat()
 
         # Move to sent
         self._pending_notifications.remove(notification)
@@ -139,7 +139,7 @@ class NotificationService:
             "update_type": update_type,
             "details": details,
             "case_id": case_id,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
         return await self.create_notification(

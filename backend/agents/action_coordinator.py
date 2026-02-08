@@ -1,10 +1,11 @@
 """Action coordinator agent for executing workflow actions."""
+import copy
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from backend.models.actions import ActionRequest, ActionResult
 from backend.models.enums import ActionType, PayerStatus
-from backend.mock_services.payer import PASubmission, PAResponse, CignaGateway, UHCGateway
+from backend.mock_services.payer import PASubmission, PAResponse, CignaGateway, UHCGateway, GenericPayerGateway
 from backend.mock_services.scenarios import get_scenario_manager
 from backend.agents.recovery_agent import get_recovery_agent
 from backend.config.logging_config import get_logger
@@ -25,9 +26,14 @@ class ActionCoordinator:
         logger.info("Action coordinator initialized")
 
     def _initialize_gateways(self) -> None:
-        """Initialize payer gateway instances."""
+        """Initialize payer gateway instances.
+
+        Creates dedicated gateways for payers with custom implementations,
+        and auto-creates generic gateways on demand for any other payer.
+        """
         scenario_manager = get_scenario_manager()
 
+        # Dedicated gateway implementations
         self._payer_gateways["Cigna"] = CignaGateway()
         self._payer_gateways["UHC"] = UHCGateway()
 
@@ -35,9 +41,23 @@ class ActionCoordinator:
         for payer_name, gateway in self._payer_gateways.items():
             scenario_manager.register_gateway(payer_name, gateway)
 
-    def get_gateway(self, payer_name: str) -> Optional[Any]:
-        """Get the gateway for a specific payer."""
-        return self._payer_gateways.get(payer_name)
+    def get_gateway(self, payer_name: str) -> Any:
+        """Get the gateway for a specific payer.
+
+        If no dedicated gateway exists, creates a GenericPayerGateway on demand.
+        This ensures all payers (including BCBS, Aetna, etc.) can use the
+        action coordination workflow.
+        """
+        gateway = self._payer_gateways.get(payer_name)
+        if gateway is None:
+            # Auto-create generic gateway for unknown payers
+            prefix = payer_name[:3].upper().replace(" ", "")
+            gateway = GenericPayerGateway(name=payer_name, prefix=prefix)
+            self._payer_gateways[payer_name] = gateway
+            scenario_manager = get_scenario_manager()
+            scenario_manager.register_gateway(payer_name, gateway)
+            logger.info("Auto-created generic gateway for payer", payer_name=payer_name)
+        return gateway
 
     async def execute_next_action(
         self,
@@ -109,14 +129,14 @@ class ActionCoordinator:
         # Submit to gateway
         response = await gateway.submit_pa(submission)
 
-        # Update payer state
-        updated_payer_states = dict(state.get("payer_states", {}))
+        # Update payer state (deep copy to avoid mutating orchestrator state)
+        updated_payer_states = copy.deepcopy(state.get("payer_states", {}))
         updated_payer_states[payer_name] = {
             "payer_name": payer_name,
-            "status": response.status.value,
+            "status": response.to_payer_status_value(),
             "reference_number": response.reference_number,
-            "submitted_at": datetime.utcnow().isoformat(),
-            "last_updated": datetime.utcnow().isoformat(),
+            "submitted_at": datetime.now(timezone.utc).isoformat(),
+            "last_updated": datetime.now(timezone.utc).isoformat(),
             "response_details": response.to_dict(),
             "required_documents": response.required_documents or [],
             "denial_reason": response.denial_reason,
@@ -136,8 +156,8 @@ class ActionCoordinator:
                 "action_type": ActionType.SUBMIT_PA.value,
                 "payer": payer_name,
                 "reference_number": response.reference_number,
-                "status": response.status.value,
-                "timestamp": datetime.utcnow().isoformat()
+                "status": response.to_payer_status_value(),
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }],
             "messages": [f"PA submitted to {payer_name}: {response.reference_number}"]
         }
@@ -169,10 +189,10 @@ class ActionCoordinator:
                 documents=[{"type": doc, "submitted": True} for doc in required_docs]
             )
 
-            # Update state
-            updated_payer_states = dict(state.get("payer_states", {}))
-            updated_payer_states[payer_name]["status"] = doc_response.status.value
-            updated_payer_states[payer_name]["last_updated"] = datetime.utcnow().isoformat()
+            # Update state (deep copy to avoid mutating orchestrator state)
+            updated_payer_states = copy.deepcopy(state.get("payer_states", {}))
+            updated_payer_states[payer_name]["status"] = doc_response.to_payer_status_value()
+            updated_payer_states[payer_name]["last_updated"] = datetime.now(timezone.utc).isoformat()
 
             return {
                 "action_type": ActionType.SUBMIT_DOCUMENTS.value,
@@ -182,7 +202,7 @@ class ActionCoordinator:
                     "action_type": ActionType.SUBMIT_DOCUMENTS.value,
                     "payer": payer_name,
                     "documents_submitted": required_docs,
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 }],
                 "messages": [f"Submitted {len(required_docs)} documents to {payer_name}"]
             }
@@ -346,10 +366,10 @@ Success Probability Assessment: {appeal_strategy.success_probability:.0%}
 
         # Update state
         payer_states = state.get("payer_states", {})
-        updated_payer_states = dict(payer_states)
-        updated_payer_states[payer_name]["status"] = appeal_response.status.value
+        updated_payer_states = copy.deepcopy(payer_states)
+        updated_payer_states[payer_name]["status"] = appeal_response.to_payer_status_value()
         updated_payer_states[payer_name]["appeal_reference"] = appeal_response.reference_number
-        updated_payer_states[payer_name]["last_updated"] = datetime.utcnow().isoformat()
+        updated_payer_states[payer_name]["last_updated"] = datetime.now(timezone.utc).isoformat()
 
         return {
             "action_type": ActionType.SUBMIT_APPEAL.value,
@@ -369,7 +389,7 @@ Success Probability Assessment: {appeal_strategy.success_probability:.0%}
                 "action_type": ActionType.SUBMIT_APPEAL.value,
                 "payer": payer_name,
                 "appeal_reference": appeal_response.reference_number,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }],
             "messages": [f"Written appeal submitted to {payer_name}: {appeal_response.reference_number}"]
         }
@@ -390,10 +410,10 @@ Success Probability Assessment: {appeal_strategy.success_probability:.0%}
         # This is simulated since we don't have actual P2P scheduling
 
         payer_states = state.get("payer_states", {})
-        updated_payer_states = dict(payer_states)
+        updated_payer_states = copy.deepcopy(payer_states)
         updated_payer_states[payer_name]["status"] = "p2p_scheduled"
         updated_payer_states[payer_name]["p2p_scheduled"] = True
-        updated_payer_states[payer_name]["last_updated"] = datetime.utcnow().isoformat()
+        updated_payer_states[payer_name]["last_updated"] = datetime.now(timezone.utc).isoformat()
 
         return {
             "action_type": "schedule_p2p",
@@ -411,7 +431,7 @@ Success Probability Assessment: {appeal_strategy.success_probability:.0%}
             "completed_actions": [{
                 "action_type": "schedule_p2p",
                 "payer": payer_name,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }],
             "messages": [f"P2P review scheduled with {payer_name}"]
         }
@@ -441,10 +461,10 @@ Success Probability Assessment: {appeal_strategy.success_probability:.0%}
             missing_docs = ["Additional clinical documentation"]
 
         payer_states = state.get("payer_states", {})
-        updated_payer_states = dict(payer_states)
+        updated_payer_states = copy.deepcopy(payer_states)
         updated_payer_states[payer_name]["status"] = "document_chase"
         updated_payer_states[payer_name]["pending_documents"] = missing_docs
-        updated_payer_states[payer_name]["last_updated"] = datetime.utcnow().isoformat()
+        updated_payer_states[payer_name]["last_updated"] = datetime.now(timezone.utc).isoformat()
 
         return {
             "action_type": "document_chase",
@@ -466,7 +486,7 @@ Success Probability Assessment: {appeal_strategy.success_probability:.0%}
                 "action_type": "document_chase",
                 "payer": payer_name,
                 "documents_requested": missing_docs,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }],
             "messages": [f"Document chase initiated for {payer_name}: {', '.join(missing_docs)}"]
         }
@@ -490,14 +510,14 @@ Success Probability Assessment: {appeal_strategy.success_probability:.0%}
         response = await gateway.check_status(reference)
 
         # Update state
-        updated_payer_states = dict(state.get("payer_states", {}))
+        updated_payer_states = copy.deepcopy(state.get("payer_states", {}))
         current_state = updated_payer_states.get(payer_name, {})
         updated_payer_states[payer_name] = {
             "payer_name": payer_name,
-            "status": response.status.value,
+            "status": response.to_payer_status_value(),
             "reference_number": current_state.get("reference_number") or response.reference_number,
             "submitted_at": current_state.get("submitted_at"),
-            "last_updated": datetime.utcnow().isoformat(),
+            "last_updated": datetime.now(timezone.utc).isoformat(),
             "response_details": response.to_dict(),
             "required_documents": response.required_documents or [],
             "denial_reason": response.denial_reason,
@@ -505,7 +525,7 @@ Success Probability Assessment: {appeal_strategy.success_probability:.0%}
         }
 
         # Check if response triggers recovery
-        recovery_needed = response.status.value == "denied" and response.appeal_deadline is not None
+        recovery_needed = response.to_payer_status_value() == "denied" and response.appeal_deadline is not None
 
         return {
             "action_type": ActionType.CHECK_STATUS.value,
@@ -517,7 +537,7 @@ Success Probability Assessment: {appeal_strategy.success_probability:.0%}
             },
             "recovery_needed": recovery_needed,
             "recovery_reason": f"{payer_name} denied" if recovery_needed else None,
-            "messages": [f"{payer_name} status: {response.status.value}"]
+            "messages": [f"{payer_name} status: {response.to_payer_status_value()}"]
         }
 
     def _get_member_id(self, patient_data: Dict[str, Any], payer_name: str) -> str:

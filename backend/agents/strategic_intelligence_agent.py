@@ -14,7 +14,7 @@ import hashlib
 import uuid
 from typing import Dict, Any, List, Optional
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select, delete
 
@@ -22,6 +22,7 @@ from backend.models.enums import TaskCategory
 from backend.reasoning.llm_gateway import get_llm_gateway
 from backend.reasoning.prompt_loader import get_prompt_loader
 from backend.config.logging_config import get_logger
+from backend.config.settings import get_settings
 from backend.storage.database import get_db
 from backend.storage.models import StrategicIntelligenceCacheModel
 
@@ -144,7 +145,7 @@ class StrategicIntelligenceAgent:
             historical_data_path: Path to historical PA cases JSON file
             cache_ttl_hours: TTL for cached strategic intelligence results (default: 24 hours)
         """
-        self.historical_data_path = historical_data_path or Path("data/historical_pa_cases.json")
+        self.historical_data_path = historical_data_path or Path(get_settings().historical_data_path)
         self._historical_data: Optional[Dict[str, Any]] = None
         self._historical_cases: Optional[List[Dict[str, Any]]] = None
         self.llm_gateway = get_llm_gateway()
@@ -173,6 +174,10 @@ class StrategicIntelligenceAgent:
                 f"Historical PA cases file not found: {self.historical_data_path}"
             )
 
+        # Synchronous read — acceptable since this is a one-time lazy load
+        # cached for the singleton lifetime. Making this async would require
+        # changing all property callers to async, with minimal benefit for a
+        # single file read.
         with open(self.historical_data_path, "r", encoding="utf-8") as f:
             self._historical_data = json.load(f)
 
@@ -300,8 +305,8 @@ class StrategicIntelligenceAgent:
                     medication_name=medication_name,
                     icd10_code=icd10_code,
                     payer_name=payer_name,
-                    cached_at=datetime.utcnow(),
-                    expires_at=datetime.utcnow() + timedelta(hours=self.cache_ttl_hours),
+                    cached_at=datetime.now(timezone.utc),
+                    expires_at=datetime.now(timezone.utc) + timedelta(hours=self.cache_ttl_hours),
                     intelligence_data=insights.to_dict(),
                     similar_cases_count=insights.similar_cases_count,
                     confidence_score=insights.confidence_score
@@ -357,7 +362,7 @@ class StrategicIntelligenceAgent:
         try:
             async with get_db() as db:
                 stmt = delete(StrategicIntelligenceCacheModel).where(
-                    StrategicIntelligenceCacheModel.expires_at < datetime.utcnow()
+                    StrategicIntelligenceCacheModel.expires_at < datetime.now(timezone.utc)
                 )
                 result = await db.execute(stmt)
                 deleted_count = result.rowcount
@@ -794,16 +799,17 @@ class StrategicIntelligenceAgent:
             case_payer = case.get("payer", {}).get("name", "").lower()
 
             # Check for medication match (more lenient matching)
+            # Uses medication aliases from config for brand/generic resolution
             med_match = False
             if medication_name:
                 med_lower = medication_name.lower()
                 if med_lower in case_med or case_med in med_lower:
                     med_match = True
-                # Also match on biosimilar families
-                if "infliximab" in med_lower and "infliximab" in case_med:
-                    med_match = True
-                if "humira" in med_lower or "adalimumab" in med_lower:
-                    if "humira" in case_med or "adalimumab" in case_med:
+                # Also match on brand/generic aliases from config
+                if not med_match:
+                    from backend.policy_digitalization.pipeline import MEDICATION_NAME_ALIASES
+                    alias = MEDICATION_NAME_ALIASES.get(med_lower, "")
+                    if alias and (alias in case_med or case_med in alias):
                         med_match = True
 
             # Check for payer match

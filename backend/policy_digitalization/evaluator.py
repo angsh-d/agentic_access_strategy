@@ -169,23 +169,41 @@ def evaluate_diagnosis_confirmed(criterion: AtomicCriterion, patient: Normalized
     criterion_codes = {c.code.upper().replace(".", "") for c in criterion.clinical_codes}
     patient_codes_normalized = {c.upper().replace(".", "") for c in patient.diagnosis_codes}
 
-    # Also match by prefix (K50.x matches K50.10)
+    # Match by exact or criterion-prefix (criterion K50 matches patient K5010)
+    # Patient code must be at least as specific as criterion code (no reverse prefix)
     matched = False
     evidence = []
     for pc in patient.diagnosis_codes:
         pc_norm = pc.upper().replace(".", "")
         for cc in criterion_codes:
-            # Exact match or prefix match (K50 matches K5010)
-            if pc_norm == cc or pc_norm.startswith(cc) or cc.startswith(pc_norm):
+            if pc_norm == cc or pc_norm.startswith(cc):
                 matched = True
                 evidence.append(f"Diagnosis {pc} matches criterion code")
                 break
 
-    # If no clinical codes on criterion, check by name matching
+    # If no clinical codes on criterion, try keyword matching against criterion description
     if not criterion_codes:
-        # Fall back to checking if any diagnosis exists
-        matched = len(patient.diagnosis_codes) > 0
-        evidence = [f"Patient has diagnosis codes: {patient.diagnosis_codes}"]
+        desc_lower = criterion.description.lower()
+        name_lower = criterion.name.lower()
+        # Build keywords from patient's diagnosis codes and severity
+        patient_context = " ".join(patient.diagnosis_codes).lower()
+        if patient.disease_severity:
+            patient_context += " " + patient.disease_severity.lower()
+        # Check if criterion description keywords appear in diagnosis context or vice versa
+        # Use the criterion name as key diagnostic term
+        diag_keywords = [w for w in name_lower.replace("_", " ").split() if len(w) >= 4]
+        if any(kw in patient_context for kw in diag_keywords):
+            matched = True
+            evidence = [f"Diagnosis keyword match: {criterion.name}"]
+        else:
+            return CriterionEvaluation(
+                criterion_id=criterion.criterion_id,
+                criterion_name=criterion.name,
+                verdict=CriterionVerdict.INSUFFICIENT_DATA,
+                evidence=[f"Criterion has no clinical codes; keyword match inconclusive"],
+                reasoning="Cannot verify diagnosis without criterion clinical codes",
+                is_required=criterion.is_required,
+            )
 
     return CriterionEvaluation(
         criterion_id=criterion.criterion_id,
@@ -264,6 +282,122 @@ def evaluate_prior_treatment_failed(criterion: AtomicCriterion, patient: Normali
             reasoning="No prior treatment history available",
             is_required=criterion.is_required,
         )
+
+    desc_lower = criterion.description.lower()
+    name_lower = criterion.name.lower()
+
+    # --- Special case: "X or more lines of therapy" criteria ---
+    # These check total treatment lines, not a specific drug failure
+    import re
+    lines_match = re.search(r'(\w+)\s+or more\s+(?:prior\s+)?lines?\s+of\s+(?:systemic\s+)?therapy', desc_lower)
+    if not lines_match:
+        lines_match = re.search(r'(?:at least|received)\s+(\w+)\s+(?:prior\s+)?lines?\s+of\s+(?:systemic\s+)?therapy', desc_lower)
+    if lines_match:
+        word_to_num = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+        required_lines_word = lines_match.group(1).lower()
+        required_lines = word_to_num.get(required_lines_word)
+        if required_lines is None:
+            try:
+                required_lines = int(required_lines_word)
+            except ValueError:
+                required_lines = None
+
+        if required_lines is not None:
+            actual_lines = patient.clinical_markers.get("lines_of_therapy")
+            if actual_lines is not None:
+                met = actual_lines >= required_lines
+                return CriterionEvaluation(
+                    criterion_id=criterion.criterion_id,
+                    criterion_name=criterion.name,
+                    verdict=CriterionVerdict.MET if met else CriterionVerdict.NOT_MET,
+                    evidence=[f"Lines of therapy: {actual_lines} (required: {required_lines}+)"],
+                    reasoning=f"{actual_lines} lines {'meets' if met else 'does not meet'} requirement of {required_lines}+",
+                    is_required=criterion.is_required,
+                )
+            # Fall back to counting treatments
+            actual_lines = len(patient.prior_treatments)
+            met = actual_lines >= required_lines
+            return CriterionEvaluation(
+                criterion_id=criterion.criterion_id,
+                criterion_name=criterion.name,
+                verdict=CriterionVerdict.MET if met else CriterionVerdict.NOT_MET,
+                evidence=[f"Prior treatments count: {actual_lines} (required: {required_lines}+)"],
+                reasoning=f"{actual_lines} prior treatments {'meets' if met else 'does not meet'} {required_lines}+ requirement",
+                is_required=criterion.is_required,
+            )
+
+    # --- Special case: "refractory to lenalidomide" ---
+    if "refractory" in desc_lower and ("lenalidomide" in desc_lower or "revlimid" in desc_lower):
+        refractory_to = patient.clinical_markers.get("refractory_to", [])
+        if isinstance(refractory_to, list):
+            for drug in refractory_to:
+                if "lenalidomide" in drug.lower() or "revlimid" in drug.lower():
+                    return CriterionEvaluation(
+                        criterion_id=criterion.criterion_id,
+                        criterion_name=criterion.name,
+                        verdict=CriterionVerdict.MET,
+                        evidence=[f"Refractory to: {drug}"],
+                        reasoning=f"Patient is refractory to lenalidomide",
+                        is_required=criterion.is_required,
+                    )
+        # Also check treatment outcomes
+        for tx in patient.prior_treatments:
+            if "lenalidomide" in tx.medication_name.lower() or "revlimid" in tx.medication_name.lower():
+                if tx.outcome in ("failed", "inadequate_response", "partial_response"):
+                    return CriterionEvaluation(
+                        criterion_id=criterion.criterion_id,
+                        criterion_name=criterion.name,
+                        verdict=CriterionVerdict.MET,
+                        evidence=[f"Lenalidomide: outcome={tx.outcome}"],
+                        reasoning=f"Lenalidomide failure documented: {tx.outcome}",
+                        is_required=criterion.is_required,
+                    )
+        return CriterionEvaluation(
+            criterion_id=criterion.criterion_id,
+            criterion_name=criterion.name,
+            verdict=CriterionVerdict.NOT_MET,
+            reasoning="Lenalidomide refractoriness not documented",
+            is_required=criterion.is_required,
+        )
+
+    # --- Special case: "NO prior gene therapy" phrased as prior_treatment_failed ---
+    if "not previously received gene therapy" in desc_lower or "no prior" in name_lower.replace("_", " "):
+        if criterion.drug_names:
+            drug_names_lower = {d.lower() for d in criterion.drug_names}
+            for tx in patient.prior_treatments:
+                tx_lower = tx.medication_name.lower()
+                for dn in drug_names_lower:
+                    if dn in tx_lower or tx_lower in dn:
+                        return CriterionEvaluation(
+                            criterion_id=criterion.criterion_id,
+                            criterion_name=criterion.name,
+                            verdict=CriterionVerdict.NOT_MET,
+                            evidence=[f"Patient received excluded drug: {tx.medication_name}"],
+                            reasoning=f"Excluded therapy found: {tx.medication_name}",
+                            is_required=criterion.is_required,
+                        )
+            # Check clinical markers
+            prior_gt = patient.clinical_markers.get("prior_gene_therapy")
+            if prior_gt is not None:
+                met = not prior_gt
+                return CriterionEvaluation(
+                    criterion_id=criterion.criterion_id,
+                    criterion_name=criterion.name,
+                    verdict=CriterionVerdict.MET if met else CriterionVerdict.NOT_MET,
+                    evidence=[f"Prior gene therapy: {prior_gt}"],
+                    reasoning=f"Gene therapy {'not received' if met else 'previously received'}",
+                    is_required=criterion.is_required,
+                )
+            return CriterionEvaluation(
+                criterion_id=criterion.criterion_id,
+                criterion_name=criterion.name,
+                verdict=CriterionVerdict.MET,
+                evidence=["No excluded drugs found in treatment history"],
+                reasoning="None of the excluded drugs found in patient history",
+                is_required=criterion.is_required,
+            )
+
+    # --- Standard treatment failure check ---
     tx = _get_matched_treatment(criterion, patient)
     if not tx:
         return CriterionEvaluation(
@@ -589,12 +723,268 @@ def evaluate_prescriber_specialty(criterion: AtomicCriterion, patient: Normalize
 
 @register_evaluator(CriterionType.PRESCRIBER_CONSULTATION)
 def evaluate_prescriber_consultation(criterion: AtomicCriterion, patient: NormalizedPatientData) -> CriterionEvaluation:
-    # Same logic as prescriber_specialty — consultation with specialist counts
+    """Evaluate prescriber consultation / attestation criteria.
+
+    Many prescriber_consultation criteria are attestation-type requirements
+    (e.g., CRS monitoring agreement, neurological toxicity monitoring) that
+    cannot be verified from patient chart data.  For these we return
+    INSUFFICIENT_DATA so they surface as documentation gaps rather than
+    false NOT_MET verdicts.
+
+    For consultation criteria that reference a specific specialty we can still
+    check the prescriber specialty on file.
+    """
+    name_lower = criterion.name.lower()
+    desc_lower = (criterion.description or "").lower()
+    combined = f"{name_lower} {desc_lower}"
+
+    # Attestation-type criteria — cannot be verified from patient data
+    attestation_keywords = [
+        "monitoring agreement", "monitoring plan", "attestation",
+        "rems", "crs monitor", "neurotox", "neuro_tox",
+        "neurological toxicity monitor", "cytokine release monitor",
+    ]
+    if any(kw in combined for kw in attestation_keywords):
+        return CriterionEvaluation(
+            criterion_id=criterion.criterion_id,
+            criterion_name=criterion.name,
+            verdict=CriterionVerdict.INSUFFICIENT_DATA,
+            evidence=[],
+            reasoning="Attestation/monitoring agreement — requires provider documentation; cannot be verified from patient chart data",
+            is_required=criterion.is_required,
+        )
+
+    # For specialty-based consultation criteria, delegate to specialty check
     return evaluate_prescriber_specialty(criterion, patient)
 
 
-@register_evaluator(CriterionType.DOCUMENTATION_PRESENT, CriterionType.CLINICAL_MARKER_PRESENT)
+@register_evaluator(CriterionType.CLINICAL_MARKER_PRESENT)
+def evaluate_clinical_marker(criterion: AtomicCriterion, patient: NormalizedPatientData) -> CriterionEvaluation:
+    """Evaluate clinical marker presence using biomarkers, functional scores, and clinical_markers."""
+    name_lower = criterion.name.lower()
+    desc_lower = criterion.description.lower()
+    combined = name_lower + " " + desc_lower
+    allowed = [v.lower() for v in criterion.allowed_values] if criterion.allowed_values else []
+
+    # --- Biomarker checks (HR, HER2, ER, PR, BCMA, PIK3CA, Ki-67) ---
+    biomarker_keywords = {
+        "hormone receptor": ["HR", "ER"],
+        "hr-positive": ["HR", "ER"],
+        "hr positive": ["HR", "ER"],
+        "estrogen receptor": ["ER"],
+        "progesterone receptor": ["PR"],
+        "her2": ["HER2"],
+        "bcma": ["BCMA"],
+        "pik3ca": ["PIK3CA"],
+        "ki-67": ["Ki-67"],
+        "ki67": ["Ki-67"],
+    }
+    for keyword, marker_names in biomarker_keywords.items():
+        if keyword in combined:
+            for marker_name in marker_names:
+                for bm in patient.biomarkers:
+                    if bm.biomarker_name.upper() == marker_name.upper():
+                        # Check if allowed_values match the result
+                        if allowed:
+                            met = bm.result and bm.result.lower() in allowed
+                        else:
+                            # Infer from criterion name: "Negative" in name means positive=False
+                            if "negative" in name_lower:
+                                met = bm.positive is False or (bm.result and bm.result.lower() == "negative")
+                            elif "positive" in name_lower:
+                                met = bm.positive is True or (bm.result and bm.result.lower() == "positive")
+                            else:
+                                met = bm.result is not None
+                        return CriterionEvaluation(
+                            criterion_id=criterion.criterion_id,
+                            criterion_name=criterion.name,
+                            verdict=CriterionVerdict.MET if met else CriterionVerdict.NOT_MET,
+                            evidence=[f"{bm.biomarker_name}: {bm.result}"],
+                            reasoning=f"Biomarker {bm.biomarker_name}={bm.result} {'matches' if met else 'does not match'} criterion",
+                            is_required=criterion.is_required,
+                        )
+            # Biomarker keyword matched but not found in patient data
+            return CriterionEvaluation(
+                criterion_id=criterion.criterion_id,
+                criterion_name=criterion.name,
+                verdict=CriterionVerdict.INSUFFICIENT_DATA,
+                reasoning=f"Biomarker data for '{keyword}' not available",
+                is_required=criterion.is_required,
+            )
+
+    # --- Organ function ---
+    if "organ function" in combined or "organ and bone marrow" in combined:
+        adequate = patient.clinical_markers.get("organ_function_adequate")
+        if adequate is not None:
+            return CriterionEvaluation(
+                criterion_id=criterion.criterion_id,
+                criterion_name=criterion.name,
+                verdict=CriterionVerdict.MET if adequate else CriterionVerdict.NOT_MET,
+                evidence=[f"Organ function adequate: {adequate}"],
+                reasoning=f"Organ function {'adequate' if adequate else 'not adequate'}",
+                is_required=criterion.is_required,
+            )
+
+    # --- Ventilator dependence ---
+    if "ventilator" in combined:
+        vent = patient.clinical_markers.get("ventilator_dependent")
+        if vent is not None:
+            # "No Permanent Ventilator Dependence" means NOT ventilator dependent = MET
+            met = not vent
+            return CriterionEvaluation(
+                criterion_id=criterion.criterion_id,
+                criterion_name=criterion.name,
+                verdict=CriterionVerdict.MET if met else CriterionVerdict.NOT_MET,
+                evidence=[f"Ventilator dependent: {vent}"],
+                reasoning=f"Ventilator dependent={vent}, criterion {'met' if met else 'not met'}",
+                is_required=criterion.is_required,
+            )
+
+    # --- Symptomatic / Asymptomatic status ---
+    if "symptomatic" in combined or "asymptomatic" in combined:
+        symptom_status = patient.clinical_markers.get("symptom_status")
+        if symptom_status:
+            if "asymptomatic" in name_lower:
+                met = symptom_status == "asymptomatic"
+            elif "symptomatic" in name_lower:
+                met = symptom_status == "symptomatic"
+            else:
+                met = symptom_status is not None
+            return CriterionEvaluation(
+                criterion_id=criterion.criterion_id,
+                criterion_name=criterion.name,
+                verdict=CriterionVerdict.MET if met else CriterionVerdict.NOT_MET,
+                evidence=[f"Symptom status: {symptom_status}"],
+                reasoning=f"Symptom status '{symptom_status}' {'matches' if met else 'does not match'} criterion",
+                is_required=criterion.is_required,
+            )
+
+    # --- Performance status (ECOG) ---
+    if "performance status" in combined or "ecog" in combined:
+        for fs in patient.functional_scores:
+            if fs.score_type.upper() == "ECOG":
+                ecog_val = _safe_float(fs.score_value)
+                if ecog_val is not None and criterion.threshold_value is not None:
+                    threshold = _safe_float(criterion.threshold_value)
+                    op = criterion.comparison_operator or ComparisonOperator.LESS_THAN_OR_EQUAL
+                    met = _compare_numeric(ecog_val, op, threshold) if threshold is not None else True
+                else:
+                    met = True  # score documented, no threshold to compare
+                return CriterionEvaluation(
+                    criterion_id=criterion.criterion_id,
+                    criterion_name=criterion.name,
+                    verdict=CriterionVerdict.MET if met else CriterionVerdict.NOT_MET,
+                    evidence=[f"ECOG: {fs.score_value}"],
+                    reasoning=f"ECOG performance status {fs.score_value}" + (f" vs threshold {criterion.threshold_value}" if criterion.threshold_value else ""),
+                    is_required=criterion.is_required,
+                )
+
+    # --- Disease progression ---
+    if "no disease progression" in combined or "no progression" in combined:
+        disease_status = patient.clinical_markers.get("disease_status", "")
+        if disease_status:
+            has_progression = "progress" in disease_status.lower()
+            met = not has_progression
+            return CriterionEvaluation(
+                criterion_id=criterion.criterion_id,
+                criterion_name=criterion.name,
+                verdict=CriterionVerdict.MET if met else CriterionVerdict.NOT_MET,
+                evidence=[f"Disease status: {disease_status}"],
+                reasoning=f"Disease status '{disease_status}' {'shows' if has_progression else 'does not show'} progression",
+                is_required=criterion.is_required,
+            )
+
+    # --- Clinical improvement/stabilization (SMA renewal) ---
+    if "clinical improvement" in combined or "stabilization" in combined:
+        # Check functional scores for motor assessments and compare to baseline if available
+        for fs in patient.functional_scores:
+            if fs.score_type.upper() in ("CHOP-INTEND", "HFMSE", "HINE", "ULM", "MFM32", "RULM"):
+                # Check for baseline comparison if available
+                baseline = patient.clinical_markers.get("hfmse_prior") or patient.clinical_markers.get("baseline_motor_score")
+                score_val = _safe_float(fs.score_value)
+                if baseline is not None and score_val is not None:
+                    baseline_val = _safe_float(baseline)
+                    if baseline_val is not None:
+                        improved_or_stable = score_val >= baseline_val
+                        return CriterionEvaluation(
+                            criterion_id=criterion.criterion_id,
+                            criterion_name=criterion.name,
+                            verdict=CriterionVerdict.MET if improved_or_stable else CriterionVerdict.NOT_MET,
+                            evidence=[f"{fs.score_type}: {fs.score_value} (baseline: {baseline})"],
+                            reasoning=f"Motor score {fs.score_value} vs baseline {baseline}: {'stable/improved' if improved_or_stable else 'declined'}",
+                            is_required=criterion.is_required,
+                        )
+                # No baseline available — score documented counts as met
+                return CriterionEvaluation(
+                    criterion_id=criterion.criterion_id,
+                    criterion_name=criterion.name,
+                    verdict=CriterionVerdict.MET,
+                    evidence=[f"{fs.score_type}: {fs.score_value}"],
+                    reasoning=f"Motor assessment documented: {fs.score_type}={fs.score_value}",
+                    is_required=criterion.is_required,
+                )
+
+    # --- Endocrine resistance ---
+    if "endocrine" in combined and "resist" in combined:
+        # Check if patient had endocrine therapy failure
+        for tx in patient.prior_treatments:
+            if tx.drug_class and "endocrine" in tx.drug_class.lower():
+                if tx.outcome in ("failed", "inadequate_response", "partial_response"):
+                    return CriterionEvaluation(
+                        criterion_id=criterion.criterion_id,
+                        criterion_name=criterion.name,
+                        verdict=CriterionVerdict.MET,
+                        evidence=[f"Failed endocrine therapy: {tx.medication_name}"],
+                        reasoning=f"Endocrine resistance documented: {tx.medication_name} outcome={tx.outcome}",
+                        is_required=criterion.is_required,
+                    )
+
+    # Fallback: INSUFFICIENT_DATA
+    return CriterionEvaluation(
+        criterion_id=criterion.criterion_id,
+        criterion_name=criterion.name,
+        verdict=CriterionVerdict.INSUFFICIENT_DATA,
+        reasoning=f"Clinical marker '{criterion.name}' requires manual verification",
+        is_required=criterion.is_required,
+    )
+
+
+@register_evaluator(CriterionType.DOCUMENTATION_PRESENT)
 def evaluate_documentation(criterion: AtomicCriterion, patient: NormalizedPatientData) -> CriterionEvaluation:
+    """Evaluate documentation presence using available patient data."""
+    name_lower = criterion.name.lower()
+    desc_lower = criterion.description.lower()
+    combined = name_lower + " " + desc_lower
+
+    # REMS facility enrollment
+    if "rems" in combined:
+        rems = patient.clinical_markers.get("rems_enrolled")
+        if rems is not None:
+            return CriterionEvaluation(
+                criterion_id=criterion.criterion_id,
+                criterion_name=criterion.name,
+                verdict=CriterionVerdict.MET if rems else CriterionVerdict.NOT_MET,
+                evidence=[f"REMS enrolled: {rems}"],
+                reasoning=f"REMS enrollment {'confirmed' if rems else 'not confirmed'}",
+                is_required=criterion.is_required,
+            )
+
+    # Baseline motor milestone score
+    if "motor milestone" in combined or "motor assessment" in combined:
+        allowed_scores = [v.upper() for v in criterion.allowed_values] if criterion.allowed_values else []
+        for fs in patient.functional_scores:
+            if fs.score_type.upper() in allowed_scores or fs.score_type.upper() in (
+                "CHOP-INTEND", "HFMSE", "HINE", "ULM", "MFM32", "RULM",
+            ):
+                return CriterionEvaluation(
+                    criterion_id=criterion.criterion_id,
+                    criterion_name=criterion.name,
+                    verdict=CriterionVerdict.MET,
+                    evidence=[f"Motor score documented: {fs.score_type}={fs.score_value}"],
+                    reasoning=f"Baseline motor score available: {fs.score_type}",
+                    is_required=criterion.is_required,
+                )
+
     # Generic documentation check — can't deterministically verify
     return CriterionEvaluation(
         criterion_id=criterion.criterion_id,
@@ -617,8 +1007,164 @@ def evaluate_disease_duration(criterion: AtomicCriterion, patient: NormalizedPat
     )
 
 
-@register_evaluator(CriterionType.CONCURRENT_THERAPY, CriterionType.NO_CONCURRENT_THERAPY)
+@register_evaluator(CriterionType.NO_CONCURRENT_THERAPY)
+def evaluate_no_concurrent_therapy(criterion: AtomicCriterion, patient: NormalizedPatientData) -> CriterionEvaluation:
+    """Evaluate that patient is NOT on a specific therapy.
+
+    Checks:
+    1. criterion.drug_names against prior_treatments and clinical_markers
+    2. Keyword matching for gene therapy, risdiplam, clinical trials
+    """
+    name_lower = criterion.name.lower()
+    desc_lower = criterion.description.lower()
+    combined = name_lower + " " + desc_lower
+    markers = patient.clinical_markers
+
+    # --- No prior gene therapy ---
+    if "gene therapy" in combined:
+        # Check clinical_markers flag
+        prior_gt = markers.get("prior_gene_therapy")
+        prior_cart = markers.get("prior_car_t_therapy")
+        if prior_gt is not None or prior_cart is not None:
+            has_gene_therapy = bool(prior_gt) or bool(prior_cart)
+            # Also check if any specific drug was received
+            if criterion.drug_names:
+                drug_names_lower = {d.lower() for d in criterion.drug_names}
+                for tx in patient.prior_treatments:
+                    if tx.medication_name.lower() in drug_names_lower:
+                        has_gene_therapy = True
+                        break
+                    for dn in drug_names_lower:
+                        if dn in tx.medication_name.lower() or tx.medication_name.lower() in dn:
+                            has_gene_therapy = True
+                            break
+            met = not has_gene_therapy
+            return CriterionEvaluation(
+                criterion_id=criterion.criterion_id,
+                criterion_name=criterion.name,
+                verdict=CriterionVerdict.MET if met else CriterionVerdict.NOT_MET,
+                evidence=[f"Prior gene therapy: {has_gene_therapy}"],
+                reasoning=f"Gene therapy {'not received' if met else 'previously received'}",
+                is_required=criterion.is_required,
+            )
+
+    # --- No concurrent risdiplam ---
+    if "risdiplam" in combined:
+        concurrent = markers.get("concurrent_risdiplam")
+        if concurrent is not None:
+            met = not concurrent
+            return CriterionEvaluation(
+                criterion_id=criterion.criterion_id,
+                criterion_name=criterion.name,
+                verdict=CriterionVerdict.MET if met else CriterionVerdict.NOT_MET,
+                evidence=[f"Concurrent risdiplam: {concurrent}"],
+                reasoning=f"Risdiplam {'not being used' if met else 'currently in use'}",
+                is_required=criterion.is_required,
+            )
+
+    # --- No clinical trial enrollment ---
+    if "clinical trial" in combined:
+        enrolled = markers.get("clinical_trial_enrollment")
+        if enrolled is not None:
+            met = not enrolled
+            return CriterionEvaluation(
+                criterion_id=criterion.criterion_id,
+                criterion_name=criterion.name,
+                verdict=CriterionVerdict.MET if met else CriterionVerdict.NOT_MET,
+                evidence=[f"Clinical trial enrollment: {enrolled}"],
+                reasoning=f"Clinical trial {'not enrolled' if met else 'currently enrolled'}",
+                is_required=criterion.is_required,
+            )
+
+    # --- Generic drug name exclusion check ---
+    if criterion.drug_names:
+        drug_names_lower = {d.lower() for d in criterion.drug_names}
+        for tx in patient.prior_treatments:
+            tx_name_lower = tx.medication_name.lower()
+            # Skip treatments with clearly-ended outcomes (completed/failed/discontinued)
+            if tx.outcome in ("failed", "completed", "inadequate_response", "intolerant", "discontinued_adverse_effects"):
+                continue
+            for dn in drug_names_lower:
+                if dn in tx_name_lower or tx_name_lower in dn:
+                    return CriterionEvaluation(
+                        criterion_id=criterion.criterion_id,
+                        criterion_name=criterion.name,
+                        verdict=CriterionVerdict.NOT_MET,
+                        evidence=[f"Patient on excluded therapy: {tx.medication_name}"],
+                        reasoning=f"Excluded therapy {tx.medication_name} found (outcome: {tx.outcome or 'unknown'})",
+                        is_required=criterion.is_required,
+                    )
+        return CriterionEvaluation(
+            criterion_id=criterion.criterion_id,
+            criterion_name=criterion.name,
+            verdict=CriterionVerdict.MET,
+            evidence=[f"No excluded therapies found in current treatment"],
+            reasoning="None of the excluded drugs found in active/ongoing treatment",
+            is_required=criterion.is_required,
+        )
+
+    return CriterionEvaluation(
+        criterion_id=criterion.criterion_id,
+        criterion_name=criterion.name,
+        verdict=CriterionVerdict.INSUFFICIENT_DATA,
+        reasoning="Concurrent therapy status requires clinical review",
+        is_required=criterion.is_required,
+    )
+
+
+@register_evaluator(CriterionType.CONCURRENT_THERAPY)
 def evaluate_concurrent_therapy(criterion: AtomicCriterion, patient: NormalizedPatientData) -> CriterionEvaluation:
+    """Evaluate that patient IS on a specific concurrent therapy.
+
+    Used for requirements like 'must be on combination therapy with X'.
+    """
+    name_lower = criterion.name.lower()
+    desc_lower = criterion.description.lower()
+    combined = name_lower + " " + desc_lower
+    markers = patient.clinical_markers
+
+    # --- Male testicular suppression ---
+    if "testicular" in combined or "steroidogenesis" in combined:
+        # For female patients, this criterion is not applicable
+        if patient.gender and patient.gender.lower() == "female":
+            return CriterionEvaluation(
+                criterion_id=criterion.criterion_id,
+                criterion_name=criterion.name,
+                verdict=CriterionVerdict.NOT_APPLICABLE,
+                evidence=["Patient is female — male suppression not applicable"],
+                reasoning="Male testicular suppression not applicable to female patients",
+                is_required=criterion.is_required,
+            )
+        # For male patients, check marker
+        suppression = markers.get("male_testicular_suppression")
+        if suppression is not None:
+            return CriterionEvaluation(
+                criterion_id=criterion.criterion_id,
+                criterion_name=criterion.name,
+                verdict=CriterionVerdict.MET if suppression else CriterionVerdict.NOT_MET,
+                evidence=[f"Male testicular suppression: {suppression}"],
+                reasoning=f"Testicular suppression {'confirmed' if suppression else 'not confirmed'}",
+                is_required=criterion.is_required,
+            )
+
+    # --- Combination therapy (aromatase inhibitor or fulvestrant) ---
+    if "combination" in combined or "aromatase" in combined or "fulvestrant" in combined:
+        # Check prior treatments for combination agents — only match if drug/class matches
+        combo_keywords = ["aromatase", "fulvestrant", "letrozole", "anastrozole", "exemestane", "inavolisib"]
+        for tx in patient.prior_treatments:
+            tx_lower = tx.medication_name.lower()
+            tx_class = (tx.drug_class or "").lower()
+            for kw in combo_keywords:
+                if kw in tx_lower or kw in tx_class:
+                    return CriterionEvaluation(
+                        criterion_id=criterion.criterion_id,
+                        criterion_name=criterion.name,
+                        verdict=CriterionVerdict.MET,
+                        evidence=[f"Combination therapy with {tx.medication_name}"],
+                        reasoning=f"Patient receiving combination therapy with {tx.medication_name}",
+                        is_required=criterion.is_required,
+                    )
+
     return CriterionEvaluation(
         criterion_id=criterion.criterion_id,
         criterion_name=criterion.name,
@@ -1015,7 +1561,22 @@ def evaluate_policy(
     """
     indication_evaluations = []
 
-    for indication in policy.indications:
+    # If the policy has defined indications, use them
+    indications_to_eval = list(policy.indications)
+
+    # If no indications defined, synthesize one from root approval groups
+    if not indications_to_eval:
+        from backend.models.policy_schema import IndicationCriteria
+        root_group_id = _find_root_approval_group(policy)
+        if root_group_id:
+            indications_to_eval.append(IndicationCriteria(
+                indication_id="AUTO_INITIAL",
+                indication_name=f"{policy.medication_name} - Initial Approval",
+                initial_approval_criteria=root_group_id,
+                initial_approval_duration_months=12,
+            ))
+
+    for indication in indications_to_eval:
         # Evaluate the root criteria group
         root_group_id = indication.initial_approval_criteria
         root_group = policy.get_group(root_group_id)
@@ -1107,6 +1668,21 @@ def evaluate_policy(
                     "action": f"Address unmet criterion: {uc.criterion_name}",
                 })
 
+    # Note: Exclusion and step therapy evaluations are reported in the result
+    # but do NOT override the overall verdict. The digitized policy exclusion
+    # trigger criteria have ambiguous semantics (positive-check criteria like
+    # "NO_ACTIVE_INFECTION" evaluating to MET means patient is CLEAR, not excluded).
+    # Step therapy matching may also miss valid treatments due to name matching
+    # limitations. Both are surfaced in gaps for human review instead.
+    if step_therapy_result and not step_therapy_result.get("satisfied", True):
+        gaps.append({
+            "criterion_id": "STEP_THERAPY",
+            "criterion_name": "Step Therapy Requirements",
+            "indication": "step_therapy",
+            "gap_type": "step_therapy_review",
+            "action": "Review step therapy: " + step_therapy_result.get("reason", "requirements may not be fully satisfied"),
+        })
+
     return PolicyEvaluationResult(
         policy_id=policy.policy_id,
         patient_id=patient.patient_id or "unknown",
@@ -1117,6 +1693,27 @@ def evaluate_policy(
         overall_verdict=overall_verdict,
         gaps=gaps,
     )
+
+
+def _find_root_approval_group(policy: DigitizedPolicy) -> Optional[str]:
+    """Find the root initial approval group in a policy that has no indications.
+
+    Looks for groups named like 'INITIAL_APPROVAL', 'INITIAL_APPROVAL_GROUP', etc.
+    """
+    approval_keywords = ["initial_approval", "approval_group", "root"]
+    for gid, group in policy.criterion_groups.items():
+        gid_lower = gid.lower()
+        for kw in approval_keywords:
+            if kw in gid_lower:
+                return gid
+    # Fallback: return the group with the most criteria/subgroups
+    if policy.criterion_groups:
+        best_gid = max(
+            policy.criterion_groups,
+            key=lambda gid: len(policy.criterion_groups[gid].criteria) + len(policy.criterion_groups[gid].subgroups),
+        )
+        return best_gid
+    return None
 
 
 def _collect_all_criteria_evals(group_result: Optional[GroupEvaluation]) -> List[CriterionEvaluation]:

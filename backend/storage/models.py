@@ -1,9 +1,14 @@
 """SQLAlchemy ORM models for database tables."""
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 import json
 
-from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Text, ForeignKey, JSON, Index
+
+def _utcnow():
+    """Return current UTC time (timezone-aware)."""
+    return datetime.now(timezone.utc)
+
+from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Text, ForeignKey, JSON, Index, UniqueConstraint
 from sqlalchemy.orm import relationship, declarative_base
 
 Base = declarative_base()
@@ -15,8 +20,8 @@ class CaseModel(Base):
 
     id = Column(String(36), primary_key=True)
     version = Column(Integer, nullable=False, default=1)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow)
 
     # Stage
     stage = Column(String(50), nullable=False, default="intake")
@@ -97,7 +102,7 @@ class DecisionEventModel(Base):
     id = Column(String(36), primary_key=True)
     case_id = Column(String(36), ForeignKey("cases.id"), nullable=False)
     event_type = Column(String(50), nullable=False)
-    timestamp = Column(DateTime, nullable=False, default=datetime.utcnow)
+    timestamp = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
 
     # Decision details
     decision_made = Column(Text, nullable=False)
@@ -154,7 +159,7 @@ class CaseStateSnapshotModel(Base):
     id = Column(String(36), primary_key=True)
     case_id = Column(String(36), ForeignKey("cases.id"), nullable=False)
     version = Column(Integer, nullable=False)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
 
     # Full state snapshot (JSON)
     state_data = Column(JSON, nullable=False)
@@ -194,9 +199,15 @@ class PolicyCacheModel(Base):
     policy_version = Column(String(50), nullable=True)  # "v1", "2024-Q3", "latest"
 
     # Cache metadata
-    cached_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    expires_at = Column(DateTime, nullable=True)
+    cached_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
     content_hash = Column(String(64), nullable=False)
+
+    # Amendment metadata
+    source_filename = Column(String(500), nullable=True)
+    upload_notes = Column(Text, nullable=True)
+    amendment_date = Column(DateTime(timezone=True), nullable=True)
+    parent_version_id = Column(String(36), nullable=True)
 
     # Policy content
     policy_text = Column(Text, nullable=False)
@@ -237,8 +248,8 @@ class StrategicIntelligenceCacheModel(Base):
     payer_name = Column(String(100), nullable=False)
 
     # Cache metadata
-    cached_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    expires_at = Column(DateTime, nullable=False)
+    cached_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
 
     # Cached intelligence data (JSON blob of StrategicInsights.to_dict())
     intelligence_data = Column(JSON, nullable=False)
@@ -264,4 +275,46 @@ class StrategicIntelligenceCacheModel(Base):
 
     def is_expired(self) -> bool:
         """Check if cache entry has expired."""
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(timezone.utc) > self.expires_at
+
+
+class PolicyDiffCacheModel(Base):
+    """Persistent cache for policy diff results + LLM summaries."""
+    __tablename__ = "policy_diff_cache"
+
+    id = Column(String(36), primary_key=True)
+    payer_name = Column(String(100), nullable=False)
+    medication_name = Column(String(200), nullable=False)
+    old_version = Column(String(50), nullable=False)
+    new_version = Column(String(50), nullable=False)
+    old_content_hash = Column(String(64), nullable=False)
+    new_content_hash = Column(String(64), nullable=False)
+    diff_data = Column(JSON, nullable=False)
+    summary_data = Column(JSON, nullable=False)
+    cached_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint('payer_name', 'medication_name', 'old_version', 'new_version',
+                         name='uq_diff_cache_versions'),
+        Index('ix_diff_cache_payer_med', 'payer_name', 'medication_name'),
+    )
+
+
+class PolicyQACacheModel(Base):
+    """Semantic cache for Policy Assistant Q&A pairs with embeddings."""
+    __tablename__ = "policy_qa_cache"
+
+    id = Column(String(36), primary_key=True)
+    question_text = Column(Text, nullable=False)
+    question_embedding = Column(JSON, nullable=False)  # List of 768 floats
+    payer_filter = Column(String(100), nullable=True)
+    medication_filter = Column(String(200), nullable=True)
+    policy_content_hash = Column(String(64), nullable=False)
+    response_data = Column(JSON, nullable=False)  # answer, citations, policies_consulted, confidence
+    cached_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    hit_count = Column(Integer, nullable=False, default=0)
+
+    __table_args__ = (
+        Index('ix_qa_cache_filters', 'payer_filter', 'medication_filter'),
+        Index('ix_qa_cache_policy_hash', 'policy_content_hash'),
+    )

@@ -1,6 +1,6 @@
 """Gemini client for general tasks - primary model with Azure fallback."""
 import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 import google.generativeai as genai
 from google.api_core.exceptions import (
@@ -73,21 +73,29 @@ class GeminiClient:
         logger.info("Generating with Gemini", model=self.model_name)
 
         try:
-            # Combine system prompt with user prompt if provided
-            full_prompt = prompt
-            if system_prompt:
-                full_prompt = f"{system_prompt}\n\n{prompt}"
-
             generation_config = genai.GenerationConfig(
                 temperature=temperature,
                 max_output_tokens=self.max_output_tokens,
             )
 
-            response = await self.model.generate_content_async(
-                full_prompt,
-                generation_config=generation_config,
-                request_options={"timeout": 60}
-            )
+            # Use system_instruction to separate system prompt from user input
+            # This prevents prompt injection via user-controlled data
+            if system_prompt:
+                model_with_system = genai.GenerativeModel(
+                    self.model_name,
+                    system_instruction=system_prompt
+                )
+                response = await model_with_system.generate_content_async(
+                    prompt,
+                    generation_config=generation_config,
+                    request_options={"timeout": 300}
+                )
+            else:
+                response = await self.model.generate_content_async(
+                    prompt,
+                    generation_config=generation_config,
+                    request_options={"timeout": 300}
+                )
 
             if not response.text:
                 raise GeminiError("Empty response from Gemini")
@@ -172,6 +180,29 @@ class GeminiClient:
 
         result = await self.generate(prompt, temperature=0.3, response_format="text")
         return result.get("response", "")
+
+    async def embed(self, text: str, task_type: str = "SEMANTIC_SIMILARITY") -> List[float]:
+        """
+        Generate an embedding vector for the given text using Gemini embedding model.
+
+        Args:
+            text: Text to embed
+            task_type: Embedding task type (SEMANTIC_SIMILARITY, RETRIEVAL_QUERY, etc.)
+
+        Returns:
+            List of 768 floats (embedding vector)
+        """
+        try:
+            result = genai.embed_content(
+                model="models/gemini-embedding-001",
+                content=text,
+                task_type=task_type,
+                output_dimensionality=768,
+            )
+            return result["embedding"]
+        except Exception as e:
+            logger.error("Gemini embedding failed", error=str(e))
+            raise GeminiError(f"Gemini embedding failed: {e}") from e
 
     def _extract_json(self, text: str) -> Dict[str, Any]:
         """Extract JSON from response text using shared utility."""

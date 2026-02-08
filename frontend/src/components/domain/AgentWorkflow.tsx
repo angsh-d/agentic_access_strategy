@@ -987,7 +987,7 @@ function HumanDecisionGatePanel({
           <div className="grid gap-2">
             {Object.entries(caseState.coverage_assessments).map(([payerName, assessment]) => {
               const status = assessment.coverage_status
-              const isPositive = status === 'covered' || status === 'approved'
+              const isPositive = status === 'covered' || status === 'likely_covered'
 
               return (
                 <div

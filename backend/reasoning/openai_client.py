@@ -29,7 +29,7 @@ class AzureOpenAIClient:
             api_key=settings.azure_openai_api_key,
             api_version=settings.azure_openai_api_version,
             azure_endpoint=settings.azure_openai_endpoint,
-            timeout=60.0
+            timeout=180.0
         )
         self.deployment = settings.azure_openai_deployment
         self.max_tokens = settings.azure_max_output_tokens
@@ -85,6 +85,8 @@ class AzureOpenAIClient:
 
             response = await self.client.chat.completions.create(**request_params)
 
+            if not response.choices:
+                raise AzureOpenAIError("No choices in Azure OpenAI response")
             response_text = response.choices[0].message.content
             if not response_text:
                 raise AzureOpenAIError("Empty response from Azure OpenAI")
@@ -180,7 +182,8 @@ class AzureOpenAIClient:
                 messages=[{"role": "user", "content": "Reply with 'ok'"}],
                 max_completion_tokens=10
             )
-            return "ok" in response.choices[0].message.content.lower()
+            content = response.choices[0].message.content if response.choices else None
+            return bool(content) and "ok" in content.lower()
         except Exception as e:
             logger.error("Azure OpenAI health check failed", error=str(e))
             return False

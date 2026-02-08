@@ -15,6 +15,11 @@ For each breaking change, explain:
 - Who is affected (which patient populations)
 - What action should be taken
 
+## Guidelines
+
+1. **Anti-Hallucination**: Only report changes that are explicitly present in the diff data above. Do not infer, assume, or fabricate policy changes. If the diff data is ambiguous about whether a change is breaking, classify it conservatively as "material" rather than guessing.
+2. **Specificity**: Reference exact criterion IDs, threshold values, and policy section names from the diff. Do not generalize — "age requirement changed" should be "AGE_001 minimum age changed from 18 to 21 years."
+
 Respond in JSON:
 ```json
 {

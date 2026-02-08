@@ -42,7 +42,7 @@
   "prescriber": {
     "name": "Dr. Michelle Park",
     "credentials": "MD, FACG",
-    "npi": "1987654321",
+    "npi": "1654321987",
     "specialty": "Gastroenterology",
     "practice_name": "Houston Gastroenterology Associates",
     "address": {
@@ -74,7 +74,7 @@
     "duration_requested": "12 months initial authorization",
     "quantity_requested": "4 infusions",
     "site_of_care": "Outpatient infusion center",
-    "start_date_requested": "2024-11-01",
+    "start_date_requested": "2026-01-01",
     "source_document": "01_Prior_Auth_Request_Form.pdf"
   },
 

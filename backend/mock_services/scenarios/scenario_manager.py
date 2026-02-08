@@ -147,10 +147,14 @@ class ScenarioManager:
 
         # Update registered payer gateways
         for payer_name, gateway in self._payer_gateways.items():
-            if payer_name.lower() == "cigna":
+            payer_key = payer_name.lower()
+            if payer_key == "cigna":
                 gateway.set_scenario(self._get_cigna_scenario_key(scenario))
-            elif payer_name.lower() == "uhc":
+            elif payer_key == "uhc":
                 gateway.set_scenario(self._get_uhc_scenario_key(scenario))
+            elif hasattr(gateway, 'set_scenario'):
+                # Generic gateways use the scenario value directly
+                gateway.set_scenario(scenario.value)
 
         logger.info(
             "Scenario changed",

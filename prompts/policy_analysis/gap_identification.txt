@@ -52,3 +52,6 @@ Identify all documentation gaps that could impact prior authorization approval. 
 3. Identify acceptable alternatives when primary documentation is unavailable
 4. Prioritize gaps that are blocking approval
 5. Consider the patient's treatment timeline urgency
+6. Do NOT assume documentation exists that is not listed in the available documents. Only cite criterion IDs from the coverage assessment results provided. Do not fabricate criterion IDs.
+7. Every gap should include at least one resolution path. Never characterize a gap as "unresolvable" — there is always an alternative documentation pathway or a clinical workaround.
+8. Frame all gaps as addressable obstacles, not reasons for denial. The goal is to identify what is needed to achieve approval.

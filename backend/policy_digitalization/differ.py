@@ -74,7 +74,7 @@ class PolicyDiffer:
 
     def diff(self, old: DigitizedPolicy, new: DigitizedPolicy) -> PolicyDiffResult:
         """Diff two policy versions."""
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         criterion_changes = self._diff_criteria(old.atomic_criteria, new.atomic_criteria)
         indication_changes = self._diff_indications(old.indications, new.indications)
@@ -121,7 +121,7 @@ class PolicyDiffer:
             policy_id=new.policy_id,
             payer=new.payer_name,
             medication=new.medication_name,
-            diff_timestamp=datetime.utcnow().isoformat(),
+            diff_timestamp=datetime.now(timezone.utc).isoformat(),
             summary=summary,
             indication_changes=indication_changes,
             step_therapy_changes=step_therapy_changes,

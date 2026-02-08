@@ -32,6 +32,10 @@ class Settings(BaseSettings):
         default="sqlite+aiosqlite:///./data/access_strategy.db",
         description="Database connection URL"
     )
+    external_database_url: str = Field(
+        default="",
+        description="External PostgreSQL database URL (takes priority over database_url)"
+    )
 
     # Application
     app_env: str = Field(default="development", description="Application environment")
@@ -52,6 +56,11 @@ class Settings(BaseSettings):
     gemini_max_output_tokens: int = Field(default=65536, description="Max output tokens for Gemini 2.5")
     claude_max_output_tokens: int = Field(default=8192, description="Max output tokens for Claude")
     azure_max_output_tokens: int = Field(default=4096, description="Max output tokens for Azure OpenAI")
+
+    # Data directories (relative to project root)
+    patients_dir: str = Field(default="data/patients", description="Directory containing patient JSON files")
+    policies_dir: str = Field(default="data/policies", description="Directory containing policy files")
+    historical_data_path: str = Field(default="data/historical_pa_cases.json", description="Path to historical PA cases")
 
 
 @lru_cache

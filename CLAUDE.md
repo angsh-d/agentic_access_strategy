@@ -87,6 +87,20 @@ Models are routed by task type in `backend/reasoning/llm_gateway.py`:
 
 LLM clients: `backend/reasoning/claude_pa_client.py`, `gemini_client.py`, `openai_client.py`. Each lazily initialized.
 
+### LLM-First Policy Evaluation
+
+Coverage assessment uses an **LLM-first** approach — Claude evaluates each policy criterion directly. No deterministic evaluator.
+
+**Flow**: `DigitizedPolicy → _format_policy_criteria() → coverage_assessment.txt prompt → Claude → _parse_assessment() → CoverageAssessment`
+
+Key rules:
+- Digitized policy criteria (IDs, types, thresholds, durations, codes, exclusions) are passed to Claude in the prompt
+- Claude must echo exact `criterion_id` values from the digitized policy — backend validates returned IDs
+- **Conservative decision model**: Claude NEVER recommends denial. `NOT_COVERED` maps to `REQUIRES_HUMAN_REVIEW`
+- Frontend displays LLM assessment per criterion. Before analysis runs, all criteria show "Pending AI Analysis"
+- The `POST /{payer}/{medication}/evaluate` endpoint returns HTTP 410 (deprecated)
+- `evaluator.py` and `patient_data_adapter.py` still exist for `impact_analyzer.py` policy-vs-policy comparison but are NOT used for coverage assessment
+
 ### Settings & Configuration
 
 All config via `backend/config/settings.py` (Pydantic BaseSettings loading from `.env`). Access with `get_settings()` (cached via `@lru_cache`). Model defaults: `claude-sonnet-4-20250514`, `gemini-3-pro-preview`.
@@ -119,7 +133,8 @@ Key directories: `src/pages/` (5 routes), `src/components/domain/` (PA-specific 
 | Directory | Purpose |
 |-----------|---------|
 | `backend/agents/` | Agent implementations (intake, policy analyzer, strategy generator, action coordinator, recovery) |
-| `backend/reasoning/` | LLM integration layer (llm_gateway, policy_reasoner, strategy_scorer, prompt_loader) |
+| `backend/reasoning/` | LLM integration layer (llm_gateway, policy_reasoner, strategy_scorer, prompt_loader, rubric_loader) |
+| `backend/policy_digitalization/` | Multi-pass policy extraction pipeline (extractor, validator, differ, impact_analyzer) |
 | `backend/orchestrator/` | LangGraph workflow engine |
 | `backend/models/` | Pydantic data models and enums |
 | `backend/api/routes/` | FastAPI route handlers (cases, strategies, policies, validation, activity, patients, websocket) |
@@ -153,11 +168,21 @@ Credentials are in `.env`: `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `AZURE_OPENAI_
 ### Archive Policy
 When creating new versions of files, immediately archive previous versions to `.archive/<timestamp>/` with descriptive README. Never keep multiple versions (v1, v2, _old suffixes) in the active workspace.
 
+### Policy Criterion Evaluation
+Policy criterion evaluation is **LLM-first** via `backend/reasoning/policy_reasoner.py`. Claude evaluates each criterion using the digitized policy structure passed in `{policy_criteria}`. Never add deterministic evaluation logic — all criterion assessment flows through Claude. The `evaluateCriterion()` function was removed from all frontend components.
+
 ### Strategy Scoring
 Strategy scoring in `backend/reasoning/strategy_scorer.py` is **deterministic, no LLM** - pure algorithmic scoring for auditability. Same inputs must produce same outputs.
 
 ### Multi-Payer Sequencing
 Strategies must always be **sequential primary-first** (COB compliance). Never generate parallel submission or secondary-first strategies. Only `StrategyType.SEQUENTIAL_PRIMARY_FIRST` is valid.
+
+### Conservative Decision Model
+AI NEVER recommends denial. In `policy_reasoner.py`:
+- `NOT_COVERED` → `REQUIRES_HUMAN_REVIEW`
+- Low confidence (< 0.3) → `REQUIRES_HUMAN_REVIEW`
+- Approval likelihood is cross-validated against criteria met ratio (capped if contradictory)
+- Human reviewers own all denial decisions
 
 ### Mock Payer Gateways
 `backend/mock_services/payer/cigna_gateway.py` and `uhc_gateway.py` implement `PayerGateway` ABC (`payer_interface.py`). Behavior is scenario-driven — responses change based on the active scenario set via `ScenarioManager`.

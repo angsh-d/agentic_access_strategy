@@ -8,7 +8,7 @@ file-based waypoint outputs for portable audit trails:
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
@@ -85,7 +85,7 @@ class WaypointWriter:
         waypoint = {
             "waypoint_type": "assessment",
             "version": "1.0",
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "case_id": case_id,
             "stage": "policy_analysis_complete",
 
@@ -120,7 +120,7 @@ class WaypointWriter:
             # Audit metadata
             "audit": {
                 "model_used": "claude",
-                "analysis_timestamp": datetime.utcnow().isoformat(),
+                "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
                 "requires_human_decision": True
             }
         }
@@ -166,7 +166,7 @@ class WaypointWriter:
         waypoint = {
             "waypoint_type": "decision",
             "version": "1.0",
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "case_id": case_id,
             "stage": "human_decision_complete",
 
@@ -189,7 +189,7 @@ class WaypointWriter:
                 "status": final_status,
                 "authorization_number": authorization_number,
                 "documentation_requests": documentation_requests or [],
-                "effective_date": datetime.utcnow().isoformat() if final_status == "approved" else None
+                "effective_date": datetime.now(timezone.utc).isoformat() if final_status == "approved" else None
             },
 
             # Complete audit trail
@@ -200,7 +200,7 @@ class WaypointWriter:
                 "human_in_the_loop": True,
                 "ai_recommendation_reviewed": True,
                 "decision_authority": "human_reviewer",
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
         }
 
@@ -249,7 +249,7 @@ class WaypointWriter:
         Returns:
             Path to the notification letter
         """
-        today = datetime.utcnow().strftime("%B %d, %Y")
+        today = datetime.now(timezone.utc).strftime("%B %d, %Y")
 
         if decision.lower() == "approved":
             letter = self._generate_approval_letter(

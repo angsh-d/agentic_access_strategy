@@ -50,6 +50,13 @@ function NavBar() {
           <a href="#intelligence" className="text-xs text-grey-500 hover:text-grey-900 transition-colors duration-300" style={{ letterSpacing: '-0.003em' }}>
             Intelligence
           </a>
+          <button
+            onClick={() => navigate('/policies')}
+            className="text-xs text-grey-500 hover:text-grey-900 transition-colors duration-300"
+            style={{ letterSpacing: '-0.003em' }}
+          >
+            Policy Bank
+          </button>
         </div>
 
         <button
@@ -210,7 +217,14 @@ function HeroSection() {
 }
 
 function PlatformSection() {
-  const capabilities = [
+  const navigate = useNavigate()
+
+  const capabilities: Array<{
+    title: string
+    description: string
+    icon: React.ReactNode
+    navigateTo?: string
+  }> = [
     {
       title: 'Benefit Verification',
       description: 'Instantly verify patient eligibility, coverage details, and plan-specific requirements across any payer.',
@@ -276,6 +290,19 @@ function PlatformSection() {
         </svg>
       ),
     },
+    {
+      title: 'Policy Intelligence',
+      description: 'Upload, digitize, and version-track payer policies. Compare amendments with AI-powered change analysis.',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <rect x="4" y="3" width="16" height="22" rx="2" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M8 9H16M8 13H14M8 17H12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <path d="M20 10L24 14L20 18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M24 14H20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      ),
+      navigateTo: '/policies',
+    },
   ]
 
   return (
@@ -310,7 +337,9 @@ function PlatformSection() {
                 style={{
                   background: '#f5f5f7',
                   border: '0.5px solid transparent',
+                  cursor: cap.navigateTo ? 'pointer' : 'default',
                 }}
+                onClick={cap.navigateTo ? () => navigate(cap.navigateTo!) : undefined}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = '#ffffff'
                   e.currentTarget.style.border = '0.5px solid rgba(0, 0, 0, 0.06)'

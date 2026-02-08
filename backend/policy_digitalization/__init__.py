@@ -1,25 +1,9 @@
 """Policy Digitalization Module.
 
-Multi-pass extraction pipeline + deterministic criteria evaluator.
+Multi-pass extraction pipeline for converting payer policy documents
+into structured, machine-readable criteria.
 """
 
-from backend.policy_digitalization.evaluator import (
-    CriterionVerdict,
-    CriterionEvaluation,
-    GroupEvaluation,
-    IndicationEvaluation,
-    PolicyEvaluationResult,
-    evaluate_policy,
-    evaluate_criterion,
-    evaluate_group,
-)
-from backend.policy_digitalization.patient_data_adapter import (
-    NormalizedPatientData,
-    NormalizedTreatment,
-    NormalizedLabResult,
-    NormalizedScreening,
-    normalize_patient_data,
-)
 from backend.policy_digitalization.exceptions import (
     ExtractionError,
     ValidationError,
@@ -38,21 +22,6 @@ from backend.policy_digitalization.impact_analyzer import (
 )
 
 __all__ = [
-    # Evaluator
-    "CriterionVerdict",
-    "CriterionEvaluation",
-    "GroupEvaluation",
-    "IndicationEvaluation",
-    "PolicyEvaluationResult",
-    "evaluate_policy",
-    "evaluate_criterion",
-    "evaluate_group",
-    # Patient data
-    "NormalizedPatientData",
-    "NormalizedTreatment",
-    "NormalizedLabResult",
-    "NormalizedScreening",
-    "normalize_patient_data",
     # Exceptions
     "ExtractionError",
     "ValidationError",

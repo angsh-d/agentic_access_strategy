@@ -82,7 +82,16 @@ class CaseOrchestrator:
         graph.add_edge("strategy_generation", "strategy_selection")
         graph.add_edge("strategy_selection", "action_coordination")
 
-        # Conditional edges from action_coordination
+        # Add shared edges from strategy_generation onwards
+        self._add_post_strategy_edges(graph)
+
+        return graph
+
+    def _add_post_strategy_edges(self, graph: StateGraph) -> None:
+        """
+        Add edges from action_coordination onwards.
+        Shared between main graph and continuation graph to avoid duplication.
+        """
         graph.add_conditional_edges(
             "action_coordination",
             self._route_after_action,
@@ -93,7 +102,6 @@ class CaseOrchestrator:
             }
         )
 
-        # Conditional edges from monitoring
         graph.add_conditional_edges(
             "monitoring",
             self._route_after_monitoring,
@@ -104,7 +112,6 @@ class CaseOrchestrator:
             }
         )
 
-        # Recovery leads back to monitoring or completion
         graph.add_conditional_edges(
             "recovery",
             self._route_after_recovery,
@@ -115,11 +122,8 @@ class CaseOrchestrator:
             }
         )
 
-        # Terminal nodes
         graph.add_edge("completion", END)
         graph.add_edge("failure", END)
-
-        return graph
 
     async def _intake_node(self, state: OrchestratorState) -> Dict[str, Any]:
         """Process intake stage."""
@@ -152,6 +156,9 @@ class CaseOrchestrator:
         assessments = {}
         all_gaps = []
 
+        # Determine primary payer (first in list by convention)
+        primary_payer = payers[0] if payers else None
+
         for payer in payers:
             try:
                 # Build patient info for assessment
@@ -175,7 +182,13 @@ class CaseOrchestrator:
 
             except Exception as e:
                 logger.error("Policy analysis failed", payer=payer, error=str(e))
-                # Continue with other payers
+                # Primary payer failure is critical — cannot proceed without it
+                if payer == primary_payer:
+                    return {
+                        "error": f"Primary payer ({payer}) policy analysis failed: {e}",
+                        "messages": [f"CRITICAL: Primary payer {payer} analysis failed — cannot proceed"]
+                    }
+                # Secondary payer failures are non-critical — continue
 
         # Check if human decision is required based on coverage results
         requires_human = self._check_requires_human_decision(assessments)
@@ -393,6 +406,8 @@ class CaseOrchestrator:
         coordinator = get_action_coordinator()
 
         payer_states = state.get("payer_states", {})
+        # Capture statuses before polling to detect progress
+        previous_statuses = {p: s.get("status") for p, s in payer_states.items()}
         updated_payer_states = dict(payer_states)
         state_updates = {}
 
@@ -413,6 +428,25 @@ class CaseOrchestrator:
         # Update state with new payer states and iteration counter
         state_updates["payer_states"] = updated_payer_states
         state_updates["monitoring_iterations"] = iterations
+
+        # Detect stale progress — if no payer status changed, track consecutive stalls
+        current_statuses = {p: s.get("status") for p, s in updated_payer_states.items()}
+        stale_iterations = state.get("stale_iterations", 0)
+        if current_statuses == previous_statuses:
+            stale_iterations += 1
+        else:
+            stale_iterations = 0
+        state_updates["stale_iterations"] = stale_iterations
+
+        if stale_iterations >= 2:
+            logger.warning("No progress after 2 consecutive monitoring iterations, completing",
+                           case_id=state.get("case_id"))
+            return {
+                **state_updates,
+                "messages": ["Monitoring: no progress detected, completing case"],
+                "is_complete": True,
+                "final_outcome": "Case processed - no further payer status changes detected"
+            }
 
         # Now check the updated response status
         updated_state = {**state, **state_updates}
@@ -690,42 +724,10 @@ class CaseOrchestrator:
         # Set entry point
         graph.set_entry_point(start_node)
 
-        # Add edges (same as main graph from strategy_generation onwards)
+        # Add edges (reuse shared definition)
         graph.add_edge("strategy_generation", "strategy_selection")
         graph.add_edge("strategy_selection", "action_coordination")
-
-        graph.add_conditional_edges(
-            "action_coordination",
-            self._route_after_action,
-            {
-                "monitoring": "monitoring",
-                "recovery": "recovery",
-                "failed": "failure"
-            }
-        )
-
-        graph.add_conditional_edges(
-            "monitoring",
-            self._route_after_monitoring,
-            {
-                "complete": "completion",
-                "recovery": "recovery",
-                "continue": "action_coordination"
-            }
-        )
-
-        graph.add_conditional_edges(
-            "recovery",
-            self._route_after_recovery,
-            {
-                "monitoring": "monitoring",
-                "complete": "completion",
-                "failed": "failure"
-            }
-        )
-
-        graph.add_edge("completion", END)
-        graph.add_edge("failure", END)
+        self._add_post_strategy_edges(graph)
 
         return graph
 

@@ -1,10 +1,11 @@
 # Agentic Access Strategy Platform - System Design
 
 ## Document Information
-- **Version**: 1.4
+- **Version**: 1.5
 - **Status**: Draft
-- **Last Updated**: 2025-01-24
+- **Last Updated**: 2026-02-08
 - **Changes**:
+  - v1.5: **LLM-First Policy Evaluation** — Replaced deterministic evaluator with Claude-driven per-criterion assessment. Added Section 3.2.1 (LLM-First Coverage Assessment Architecture), updated prompt architecture, added policy digitalization pipeline to project structure, added conservative decision model, added criterion_id alignment protocol
   - v1.4: Added "Why Agentic AI?" differentiation section, elevated agentic capabilities to Executive Summary, added Demo Walkthrough section, added "Judgment Under Uncertainty" design principle
   - v1.3: Critical review - fixed section numbering, scoring consistency, added provenance for architectural decisions, added missing implementations
   - v1.2: Updated tech stack to React/Tailwind frontend, FastAPI backend; Added Apple-inspired UI/UX design system
@@ -22,7 +23,7 @@ This document defines the system architecture for an **Agentic Access Decision P
 
 2. **Clinical Defensibility First**: Every decision must be traceable to policy criteria and clinical evidence
 
-3. **Deterministic Reasoning**: Same inputs must produce same outputs for auditability
+3. **Deterministic Scoring, LLM-First Evaluation**: Strategy scoring is deterministic (same inputs = same outputs) for auditability. Policy criterion evaluation is LLM-first — Claude assesses each criterion with structured reasoning, confidence scores, and evidence citations. The deterministic evaluator has been removed in favor of direct LLM assessment with criterion_id alignment.
 
 4. **Human-in-the-Loop**: Autonomous action with transparent override capability
 
@@ -85,10 +86,10 @@ This section explicitly contrasts the Agentic Access Platform with traditional p
 
 This platform demonstrates **judgment, planning, and orchestration**—not just workflow execution. The system:
 
-1. **Reasons** about policy requirements using Claude PA Skill
-2. **Plans** optimal access strategies using deterministic scoring
+1. **Reasons** about policy requirements using Claude PA Skill with per-criterion LLM assessment
+2. **Plans** optimal access strategies using deterministic scoring informed by LLM confidence scores
 3. **Adapts** when encountering obstacles (denials, missing documentation)
-4. **Explains** every decision with full provenance for clinical defensibility
+4. **Explains** every decision with full provenance — criterion-level reasoning, confidence, and evidence citations
 
 ---
 
@@ -126,7 +127,7 @@ This platform demonstrates **judgment, planning, and orchestration**—not just 
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐  │
 │  │  Claude Policy  │  │  Strategy       │  │  LLM Gateway                │  │
 │  │  Reasoner       │  │  Scorer         │  │  (Multi-Model)              │  │
-│  │  (PA Skill)     │  │  (Deterministic)│  │                             │  │
+│  │ (LLM-First Eval)│  │  (Deterministic)│  │                             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘  │
 │                                                     │                        │
 │                              ┌──────────────────────┴──────────────────────┐ │
@@ -434,39 +435,107 @@ Prompts are stored in `/prompts/` directory with parameter substitution:
     └── policy_interpretation.txt     # How to interpret payer policies
 ```
 
-**Example: `coverage_assessment.txt`**
+**Example: `coverage_assessment.txt`** (v1.5 — LLM-First with Criterion ID Alignment)
 
 ```text
-You are a clinical policy analyst evaluating prior authorization requests.
+You are a clinical policy analyst specializing in prior authorization
+requirements for specialty medications.
 
-## Task
-Analyze whether the requested therapy meets the payer's coverage criteria.
+## Patient Information
+{patient_info}
 
-## Payer Policy
-{policy_text}
+## Medication Requested
+{medication_info}
 
-## Patient Clinical Summary
-{patient_summary}
+## Payer Policy Document
+{policy_document}
 
-## Therapy Request
-- Drug: {therapy_name}
-- Indication: {indication}
-- Dose: {dose}
-- Route: {route}
-- Site of Care: {site_of_care}
+## Decision Rubric
+{decision_rubric}
 
-## Instructions
-1. Identify ALL coverage criteria from the policy document
-2. For each criterion, assess whether the patient meets it
-3. Cite specific evidence from the patient summary
-4. Flag any missing documentation
-5. Provide overall determination with confidence score
+## Digitized Policy Criteria Structure
+{policy_criteria}
+← Includes atomic criteria with IDs, types, thresholds, durations,
+   exclusion criteria, step therapy requirements, and criterion groups.
+
+## CRITICAL: Criterion ID Alignment Rules
+1. Use EXACT criterion_id values from the digitized criteria above.
+2. Evaluate EVERY criterion listed. Do not skip any.
+3. Exclusion criteria: is_met=true means exclusion IS triggered.
+4. [REQUIRED] criteria are mandatory for approval.
+5. [EXTRACTION: low/unconfident] — cross-reference with raw policy.
+6. Duration requirements: verify against exact threshold.
+7. Requirements NOT in structured criteria: use ADDITIONAL_ prefix.
+
+## CRITICAL: Conservative Decision Model
+YOU MUST NEVER RECOMMEND DENIAL.
+- AI recommends APPROVE or PEND only
+- NOT_COVERED → requires_human_review
+- Low confidence → requires_human_review
 
 ## Output Format
-Return a JSON object matching the CoverageAssessment schema.
-Be conservative - if evidence is ambiguous, mark as "unclear".
-Never fabricate evidence not present in the patient summary.
+Return JSON with: coverage_status, approval_likelihood,
+criteria_assessments[{criterion_id, is_met, confidence, reasoning, ...}],
+documentation_gaps, step_therapy_*, recommendations
 ```
+
+#### 3.2.1 LLM-First Coverage Assessment Architecture (v1.5)
+
+The system uses an **LLM-first** approach for policy criterion evaluation. The previous deterministic evaluator (~1500 lines of brittle pattern-matching code) has been removed. Claude now directly evaluates each criterion using the digitized policy structure.
+
+**Architecture**:
+```
+Digitized Policy (AtomicCriteria + CriterionGroups + Exclusions)
+       │
+       ▼
+PolicyReasoner._format_policy_criteria()  ← Formats all criteria with IDs,
+       │                                     thresholds, durations, codes
+       ▼
+coverage_assessment.txt prompt            ← Includes structured criteria +
+       │                                     criterion_id alignment rules
+       ▼
+Claude (temp=0.0)                         ← Evaluates EACH criterion by ID
+       │                                     Returns is_met, confidence, reasoning
+       ▼
+PolicyReasoner._parse_assessment()        ← Validates criterion_ids against
+       │                                     digitized policy, logs mismatches
+       ▼
+CoverageAssessment                        ← Per-criterion results with evidence
+       │
+       ▼
+Frontend (PolicyValidationCard)           ← Displays LLM results by criterion_id
+                                             No client-side evaluation
+```
+
+**Key Design Decisions**:
+
+| Decision | Rationale |
+|----------|-----------|
+| **Remove deterministic evaluator** | Failed on BCBS drugs (e.g., "SMA Diagnosis: Not Met" for G12.1 patients). Could not handle cross-payer policy variations without per-payer hardcoding. |
+| **Pass digitized criteria to Claude** | Claude gets exact criterion_ids, types, thresholds, and clinical codes — ensuring alignment between policy structure and assessment output. |
+| **Criterion_id alignment protocol** | Prompt requires Claude to echo exact criterion_ids. Backend validates returned IDs against policy. Mismatches are logged for monitoring. |
+| **Include exclusion criteria** | Safety exclusions (contraindications, pregnancy, active cancer) must be evaluated — omitting them risks unsafe coverage recommendations. |
+| **Include step therapy details** | Drug names, classes, minimum trial durations, and failure/intolerance rules are passed so Claude can accurately assess prior treatment history. |
+| **Conservative decision model** | Claude NEVER recommends denial. `NOT_COVERED` maps to `REQUIRES_HUMAN_REVIEW`. Low confidence triggers human review. |
+| **Frontend shows "Pending AI Analysis"** | Before analysis runs, all criteria show neutral "Pending" state — no client-side guessing. |
+| **Graceful degradation** | If digitized policy unavailable, Claude works from raw policy text alone with generated criterion_ids. |
+
+**Criterion_id Validation Flow** (in `_parse_assessment`):
+1. Build set of known IDs from `digitized_policy.atomic_criteria.keys()`
+2. For each LLM-returned assessment, check if `criterion_id` exists in known set
+3. Log warnings for unknown IDs (hallucinated or paraphrased)
+4. Log warnings for policy criteria NOT evaluated by LLM
+5. Frontend maps `criterion_id → assessment` for display; unmatched criteria show "Pending"
+
+**Fields passed to Claude per criterion**:
+- `criterion_id`, `name`, `type`, `category`, `description`, `policy_text`
+- `clinical_codes` (ICD-10, HCPCS, CPT)
+- `threshold_value`, `threshold_value_upper`, `threshold_unit`, `comparison_operator`
+- `minimum_duration_days` (step therapy)
+- `drug_names`, `drug_classes`, `allowed_values`
+- `is_required` flag (`[REQUIRED]`/`[OPTIONAL]`)
+- `extraction_confidence` (`[EXTRACTION: low/unconfident]`)
+- `evidence_types` (acceptable evidence)
 
 #### Determinism & Reproducibility
 
@@ -1956,8 +2025,19 @@ cd backend && uvicorn main:app  # FastAPI server (port 8000)
 │   │   ├── claude_pa_client.py       # Claude PA Skill (policy reasoning)
 │   │   ├── gemini_client.py          # Gemini client (primary)
 │   │   ├── openai_client.py          # OpenAI client (fallback)
-│   │   ├── policy_reasoner.py        # Coverage assessment
-│   │   └── strategy_scorer.py        # Deterministic scoring
+│   │   ├── policy_reasoner.py        # LLM-first coverage assessment
+│   │   ├── strategy_scorer.py        # Deterministic scoring
+│   │   ├── prompt_loader.py          # Prompt loading with placeholder substitution
+│   │   └── rubric_loader.py          # Payer-specific decision rubrics
+│   │
+│   ├── policy_digitalization/         # Multi-pass policy extraction pipeline
+│   │   ├── __init__.py
+│   │   ├── pipeline.py               # Orchestrates extract → validate → evaluate
+│   │   ├── extractor.py              # Pass 1: LLM extracts criteria from PDF
+│   │   ├── validator.py              # Pass 2: LLM cross-validates extraction
+│   │   ├── differ.py                 # Policy-vs-policy comparison
+│   │   ├── impact_analyzer.py        # Patient impact analysis for policy changes
+│   │   └── exceptions.py             # PolicyNotFoundError, ExtractionError, etc.
 │   │
 │   ├── storage/
 │   │   ├── __init__.py
@@ -2324,7 +2404,8 @@ This section provides detailed rationale for every major architectural decision,
 |----------|--------|-------------------------------|
 | **Deterministic Strategy Scoring** | Weighted algorithm (no LLM) | Same inputs → same outputs. Auditors can reproduce scoring. No "black box" defense needed. |
 | **Immutable Audit Log** | Append-only with cryptographic signatures | Tamper-evident trail. Every decision traceable to inputs, model version, timestamp. |
-| **Separation: Reasoning vs. Scoring** | Claude reasons, algorithm scores | Claude provides qualitative assessment; deterministic algorithm provides quantitative ranking. Combines LLM insight with reproducibility. |
+| **Separation: Reasoning vs. Scoring** | Claude evaluates criteria, algorithm scores strategies | Claude provides per-criterion assessment (is_met, confidence, reasoning); deterministic algorithm provides quantitative strategy ranking. Combines LLM clinical judgment with reproducible scoring. |
+| **LLM-First Policy Evaluation** | Claude evaluates all criteria by ID | Replaced brittle deterministic evaluator. Claude receives digitized policy structure with criterion_ids and returns structured assessments. Backend validates ID alignment. Conservative model: AI never recommends denial. |
 | **External Prompts** | `.txt` files in `/prompts/` | Version-controlled prompt changes. Non-engineers can review/modify clinical reasoning instructions. Git history provides prompt provenance. |
 | **Explicit Confidence Scores** | 0.0-1.0 on all LLM outputs | Enables threshold-based human escalation. Low-confidence cases automatically flagged for review. |
 

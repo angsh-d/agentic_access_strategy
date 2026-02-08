@@ -1,6 +1,6 @@
 """Intake agent for validating and preparing case data."""
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from backend.models.case_state import CaseState, PatientInfo, MedicationRequest, PayerState
 from backend.models.enums import CaseStage, PayerStatus
 from backend.config.logging_config import get_logger
+from backend.config.settings import get_settings
 
 logger = get_logger(__name__)
 
@@ -44,7 +45,7 @@ class IntakeAgent:
             patients_dir: Directory containing patient data files
             enable_mcp_validation: Enable external MCP validation (default True)
         """
-        self.patients_dir = patients_dir or Path("data/patients")
+        self.patients_dir = patients_dir or Path(get_settings().patients_dir)
         self.enable_mcp_validation = enable_mcp_validation
         logger.info("Intake agent initialized", mcp_validation=enable_mcp_validation)
 
@@ -93,7 +94,7 @@ class IntakeAgent:
             medication=medication_request,
             payer_states=payer_states,
             metadata={
-                "intake_timestamp": datetime.utcnow().isoformat(),
+                "intake_timestamp": datetime.now(timezone.utc).isoformat(),
                 "source_patient_id": patient_id,
                 "validation_result": validation_result
             }
@@ -258,8 +259,13 @@ class IntakeAgent:
         if not file_path.exists():
             raise FileNotFoundError(f"Patient data not found: {patient_id}")
 
-        with open(file_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        import asyncio
+
+        def _read_json():
+            with open(file_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+
+        data = await asyncio.to_thread(_read_json)
 
         logger.debug("Patient data loaded", patient_id=patient_id)
         return data
@@ -437,7 +443,7 @@ class IntakeAgent:
     def _generate_case_id(self, patient_id: str) -> str:
         """Generate a unique case ID."""
         from uuid import uuid4
-        timestamp = datetime.utcnow().strftime("%Y%m%d")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d")
         return f"CASE-{timestamp}-{str(uuid4())[:8].upper()}"
 
 

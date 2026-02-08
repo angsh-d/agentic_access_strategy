@@ -1,6 +1,6 @@
 """FastAPI application entry point."""
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 from pathlib import Path
 import uuid
@@ -26,6 +26,13 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     logger.info("Starting Agentic Access Strategy Platform")
 
+    # Validate critical API keys at startup
+    settings = get_settings()
+    if not settings.anthropic_api_key:
+        logger.error("ANTHROPIC_API_KEY not set — Claude policy reasoning will fail")
+    if not settings.gemini_api_key:
+        logger.warning("GEMINI_API_KEY not set — Gemini-backed features unavailable")
+
     # Initialize database
     await init_db()
     logger.info("Database initialized")
@@ -33,6 +40,15 @@ async def lifespan(app: FastAPI):
     # Initialize scenario manager
     get_scenario_manager()
     logger.info("Scenario manager initialized")
+
+    # File watcher disabled — upload endpoint handles pipeline directly
+    # from backend.policy_digitalization.file_watcher import PolicyFileWatcher
+    # from backend.api.routes.websocket import get_notification_manager
+    # notification_mgr = get_notification_manager()
+    # file_watcher = PolicyFileWatcher(
+    #     notification_callback=notification_mgr.broadcast_notification,
+    # )
+    # file_watcher.start()
 
     yield
 
@@ -65,8 +81,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept", "X-Requested-With"],
 )
 
 
@@ -101,15 +117,36 @@ app.include_router(websocket.router)
 # Health check and utility endpoints
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """Health check endpoint.
+
+    Lightweight liveness probe — checks database connectivity only.
+    Does NOT call LLM APIs (costs credits, adds latency, creates external
+    dependencies inappropriate for a liveness/readiness probe).
+    Use /health/llm for full LLM provider health checks.
+    """
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version": "0.1.0",
+        "components": {
+            "database": True,
+        }
+    }
+
+
+@app.get("/health/llm")
+async def health_check_llm():
+    """Deep health check that verifies LLM provider connectivity.
+
+    This endpoint makes real API calls to each LLM provider.
+    Use sparingly — it costs API credits and adds latency.
+    """
     from backend.reasoning.llm_gateway import get_llm_gateway
 
-    # Check LLM availability
     llm_gateway = get_llm_gateway()
     llm_health = await llm_gateway.health_check()
 
     components = {
-        "database": True,
         "claude": llm_health.get("claude", False),
         "gemini": llm_health.get("gemini", False),
         "azure_openai": llm_health.get("azure_openai", False)
@@ -118,7 +155,7 @@ async def health_check():
 
     return {
         "status": "healthy" if all_healthy else "degraded",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "version": "0.1.0",
         "components": components
     }
@@ -176,6 +213,10 @@ if FRONTEND_DIST.exists():
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
+        # Prevent SPA catch-all from masking API 404s
+        if full_path.startswith("api/"):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail=f"API endpoint not found: /{full_path}")
         file_path = FRONTEND_DIST / full_path
         if file_path.exists() and file_path.is_file():
             return FileResponse(str(file_path))

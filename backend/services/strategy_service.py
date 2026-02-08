@@ -113,6 +113,24 @@ class StrategyService:
             "weights_used": scores[0].weights_used if scores else {}
         }
 
+    async def get_case_assessments(self, case_id: str) -> Dict[str, Any]:
+        """
+        Get coverage assessments for a case through the service layer.
+
+        Args:
+            case_id: Case identifier
+
+        Returns:
+            Coverage assessments dict, or empty dict if not found
+        """
+        if not self.repository:
+            raise ValueError("Database session required")
+
+        case = await self.repository.get_by_id(case_id)
+        if not case:
+            return {}
+        return case.coverage_assessments or {}
+
     def score_with_custom_weights(
         self,
         assessments: Dict[str, Dict[str, Any]],

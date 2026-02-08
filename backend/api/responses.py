@@ -28,6 +28,33 @@ class CaseResponse(BaseModel):
     # Metadata from intake
     metadata: Optional[Dict[str, Any]] = None
 
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "CaseResponse":
+        """
+        Factory method to construct CaseResponse from a case data dict.
+        Eliminates repeated 15-field manual mapping across API routes.
+        """
+        return cls(
+            case_id=data["case_id"],
+            version=data["version"],
+            stage=data["stage"],
+            created_at=data["created_at"],
+            updated_at=data["updated_at"],
+            patient=data.get("patient"),
+            medication=data.get("medication"),
+            payer_states=data.get("payer_states", {}),
+            selected_strategy_id=data.get("selected_strategy_id"),
+            strategy_rationale=data.get("strategy_rationale"),
+            error_message=data.get("error_message"),
+            coverage_assessments=data.get("coverage_assessments"),
+            available_strategies=data.get("available_strategies"),
+            documentation_gaps=data.get("documentation_gaps"),
+            requires_human_decision=data.get("requires_human_decision"),
+            human_decision_reason=data.get("human_decision_reason"),
+            human_decisions=data.get("human_decisions"),
+            metadata=data.get("metadata"),
+        )
+
 
 class CaseListResponse(BaseModel):
     """Response containing list of cases."""

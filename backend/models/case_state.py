@@ -1,6 +1,6 @@
 """Case state models for tracking prior authorization cases."""
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from uuid import uuid4
 
@@ -15,7 +15,7 @@ class HumanDecision:
     action: HumanDecisionAction = HumanDecisionAction.APPROVE
     reviewer_id: str = ""
     reviewer_name: Optional[str] = None
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     original_recommendation: Optional[str] = None
     override_reason: Optional[str] = None
     notes: Optional[str] = None
@@ -78,8 +78,8 @@ class CaseState:
     """
     case_id: str = field(default_factory=lambda: str(uuid4()))
     version: int = 1
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Current stage
     stage: CaseStage = CaseStage.INTAKE
@@ -118,7 +118,7 @@ class CaseState:
         import copy
         new_state = copy.deepcopy(self)
         new_state.version = self.version + 1
-        new_state.updated_at = datetime.utcnow()
+        new_state.updated_at = datetime.now(timezone.utc)
         return new_state
 
     def transition_to(self, new_stage: CaseStage) -> "CaseState":

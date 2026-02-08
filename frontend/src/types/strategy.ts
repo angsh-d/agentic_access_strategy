@@ -91,6 +91,50 @@ export interface SelectStrategyInput {
 }
 
 /**
+ * Backend strategy shape (from API response available_strategies).
+ * Used to type the transformer from backend → frontend Strategy.
+ */
+export interface BackendStrategy {
+  strategy_id: string
+  strategy_type: string
+  name: string
+  description: string
+  is_recommended?: boolean
+  base_approval_score?: number
+  base_speed_score?: number
+  base_rework_risk?: number
+  base_patient_burden?: number
+  risk_factors?: string[]
+  rationale?: string
+}
+
+/**
+ * Transform a backend strategy to the frontend Strategy type.
+ */
+export function transformBackendStrategy(s: BackendStrategy): Strategy {
+  return {
+    id: s.strategy_id,
+    type: s.strategy_type as StrategyType,
+    name: s.name,
+    description: s.description,
+    is_recommended: s.is_recommended ?? false,
+    score: {
+      total_score: (s.base_approval_score || 0) / 10,
+      approval_probability: (s.base_approval_score || 0) / 10,
+      days_to_therapy: Math.round((1 - (s.base_speed_score || 0) / 10) * 10) + 3,
+      rework_risk: (s.base_rework_risk || 0) / 10,
+      cost_efficiency: 1 - (s.base_patient_burden || 0) / 10,
+      criteria: [],
+    },
+    actions: [],
+    estimated_days: Math.round((1 - (s.base_speed_score || 5) / 10) * 10) + 3,
+    confidence_range: { low: 0.5, high: 0.8 },
+    risks: s.risk_factors || [],
+    advantages: [s.rationale || ''],
+  }
+}
+
+/**
  * Strategy comparison for display
  */
 export interface StrategyComparison {

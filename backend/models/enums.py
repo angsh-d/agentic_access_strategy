@@ -45,6 +45,7 @@ class TaskCategory(str, Enum):
     SUMMARY_GENERATION = "summary_generation"
     DATA_EXTRACTION = "data_extraction"
     NOTIFICATION = "notification"
+    POLICY_QA = "policy_qa"
 
 
 class LLMProvider(str, Enum):

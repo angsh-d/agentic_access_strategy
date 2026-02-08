@@ -1,7 +1,7 @@
 """Pass 1: Gemini Policy Extractor — extracts structured criteria from policy documents."""
 
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -36,12 +36,19 @@ class GeminiPolicyExtractor:
         logger.info("GeminiPolicyExtractor initialized")
 
     async def extract_from_text(
-        self, policy_text: str, policy_id: str = "UNKNOWN"
+        self, policy_text: str, policy_id: str = "UNKNOWN", version_hint: str = ""
     ) -> RawExtractionResult:
         """
         Extract structured criteria from policy text.
 
         Uses DATA_EXTRACTION task category → Gemini primary, Azure fallback.
+
+        Args:
+            policy_text: Raw policy text to extract from
+            policy_id: Identifier for the policy
+            version_hint: Optional directive for multi-version documents (e.g.,
+                "This document contains multiple policy versions. Extract ONLY
+                the 2025 policy version.")
         """
         logger.info("Starting Pass 1 extraction from text", policy_id=policy_id, text_length=len(policy_text))
 
@@ -49,7 +56,7 @@ class GeminiPolicyExtractor:
 
         prompt = self.prompt_loader.load(
             "policy_digitalization/extraction_pass1.txt",
-            {"policy_document": policy_text}
+            {"policy_document": policy_text, "version_hint": version_hint}
         )
 
         result = await self.llm_gateway.generate(
@@ -85,15 +92,19 @@ class GeminiPolicyExtractor:
             source_hash=doc_hash,
             source_type="text",
             extraction_model="gemini",
-            extraction_timestamp=datetime.utcnow().isoformat(),
+            extraction_timestamp=datetime.now(timezone.utc).isoformat(),
             sections_identified=extracted_data.get("sections_identified", []),
         )
 
-    async def extract_from_pdf(self, pdf_path: str) -> RawExtractionResult:
+    async def extract_from_pdf(self, pdf_path: str, version_hint: str = "") -> RawExtractionResult:
         """
         Extract structured criteria from a PDF policy document.
 
         Uploads PDF to Gemini for extraction.
+
+        Args:
+            pdf_path: Path to the PDF file
+            version_hint: Optional directive for multi-version documents
         """
         import google.generativeai as genai
         from backend.config.settings import get_settings
@@ -118,7 +129,7 @@ class GeminiPolicyExtractor:
 
         prompt = self.prompt_loader.load(
             "policy_digitalization/extraction_pass1.txt",
-            {"policy_document": "[PDF DOCUMENT ATTACHED]"}
+            {"policy_document": "[PDF DOCUMENT ATTACHED]", "version_hint": version_hint}
         )
 
         model = genai.GenerativeModel(settings.gemini_model or "gemini-3-pro-preview")
@@ -128,7 +139,7 @@ class GeminiPolicyExtractor:
                 temperature=0.1,
                 max_output_tokens=65536,
             ),
-            request_options={"timeout": 120}
+            request_options={"timeout": 300}
         )
 
         extracted_data = extract_json_from_text(response.text)
@@ -143,6 +154,6 @@ class GeminiPolicyExtractor:
             source_hash=doc_hash,
             source_type="pdf",
             extraction_model=settings.gemini_model or "gemini-3-pro-preview",
-            extraction_timestamp=datetime.utcnow().isoformat(),
+            extraction_timestamp=datetime.now(timezone.utc).isoformat(),
             sections_identified=extracted_data.get("sections_identified", []),
         )

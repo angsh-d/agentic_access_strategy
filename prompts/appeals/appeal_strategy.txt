@@ -87,3 +87,5 @@ Develop a comprehensive appeal strategy that addresses the denial reason and max
 3. **Patient-Centric**: Frame arguments around patient medical necessity
 4. **Actionable**: Provide specific, implementable recommendations
 5. **Realistic**: Provide honest assessment of success probability
+6. **Conservative Model**: Always recommend pursuing appeals when there is any reasonable path to approval. Never advise abandoning an appeal — if success probability is low, recommend escalation (external review, state insurance department) rather than withdrawal
+7. **Anti-Hallucination**: Base all arguments and evidence citations on the provided clinical documentation only. Do not fabricate clinical data, journal references, or policy citations. If supporting evidence is insufficient, identify what additional documentation is needed rather than inventing it

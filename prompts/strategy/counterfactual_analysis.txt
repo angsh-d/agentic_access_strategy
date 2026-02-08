@@ -64,4 +64,8 @@ Respond in JSON format:
 }
 ```
 
-Be specific about timelines, probabilities, and reasoning. This analysis helps stakeholders understand the decision and builds confidence in the system's judgment.
+## Guidelines
+
+1. Be specific about timelines, probabilities, and reasoning. This analysis helps stakeholders understand the decision and builds confidence in the system's judgment.
+2. **Anti-Hallucination**: Base all projected probabilities, timelines, and outcomes on the coverage assessment data provided above. Do not fabricate approval rates, processing times, or clinical outcomes. If data is insufficient to project a specific metric, state the uncertainty rather than inventing a number.
+3. **Conservative Model**: Frame all alternatives as viable options with different tradeoff profiles — do not characterize any strategy as "certain to fail." If a strategy has very low projected approval, explain the specific blocking criteria rather than dismissing it.

@@ -103,6 +103,61 @@ class ReferenceDataValidator:
         # SNOMED, RxNorm — accept any non-empty string
         return True
 
+    @staticmethod
+    def _parse_dose_string(dose_str: str):
+        """Parse '5 mg/kg' into (5.0, 'mg/kg') or (None, dose_str)."""
+        import re as _re
+        m = _re.match(r'^([\d.]+)\s*(.+)$', dose_str.strip())
+        if m:
+            try:
+                return float(m.group(1)), m.group(2).strip()
+            except ValueError:
+                pass
+        return None, dose_str
+
+    def _map_dosing_dict(self, dr: Dict[str, Any], indication_name: str):
+        """Map Gemini's dosing dict format to DosingRequirement fields."""
+        from backend.models.policy_schema import DosingRequirement
+
+        # Parse 'dose' field like '5 mg/kg' into dose_value + dose_unit
+        dose_value, dose_unit = None, "as_prescribed"
+        if "dose" in dr:
+            dose_value, dose_unit = self._parse_dose_string(str(dr["dose"]))
+
+        # Parse max_dose — may be a number or a string like '10 mg/kg every 4 weeks'
+        max_dose = None
+        max_dose_notes = ""
+        raw_max = dr.get("max_dose")
+        if raw_max is not None:
+            if isinstance(raw_max, (int, float)):
+                max_dose = float(raw_max)
+            else:
+                parsed_val, _ = self._parse_dose_string(str(raw_max))
+                if parsed_val is not None:
+                    max_dose = parsed_val
+                else:
+                    max_dose_notes = f"Max dose: {raw_max}"
+
+        # Infer phase from keys or default
+        phase = dr.get("phase", "all")
+        if phase not in ("induction", "maintenance", "both", "all"):
+            phase = "all"
+
+        notes_parts = [dr.get("notes", ""), max_dose_notes]
+        notes = "; ".join(p for p in notes_parts if p) or None
+
+        return DosingRequirement(
+            indication=dr.get("indication", indication_name),
+            phase=phase,
+            dose_value=dose_value,
+            dose_unit=dr.get("dose_unit", dose_unit),
+            route=dr.get("route", "IV"),
+            frequency=dr.get("frequency", "as_prescribed"),
+            max_dose=max_dose,
+            max_dose_unit=dr.get("max_dose_unit"),
+            notes=notes,
+        )
+
     async def _mcp_validate_icd10(
         self, data: Dict[str, Any], provenances: Dict[str, CriterionProvenance]
     ):
@@ -148,17 +203,23 @@ class ReferenceDataValidator:
         from backend.models.policy_schema import (
             AtomicCriterion, CriterionGroup, IndicationCriteria,
             ExclusionCriteria, StepTherapyRequirement, ClinicalCode,
-            DosingRequirement,
+            DosingRequirement, CriterionType,
         )
+
+        valid_criterion_types = {e.value for e in CriterionType}
 
         # Parse atomic criteria — tolerate individual failures
         atomic_criteria = {}
         for cid, cdata in data.get("atomic_criteria", {}).items():
             try:
                 clinical_codes = [ClinicalCode(**c) for c in cdata.get("clinical_codes", [])]
+                raw_type = cdata.get("criterion_type", "custom")
+                if raw_type not in valid_criterion_types:
+                    logger.warning("Unknown criterion_type, falling back to custom", criterion_id=cid, raw_type=raw_type)
+                    raw_type = "custom"
                 atomic_criteria[cid] = AtomicCriterion(
                     criterion_id=cdata.get("criterion_id", cid),
-                    criterion_type=cdata.get("criterion_type", "custom"),
+                    criterion_type=raw_type,
                     name=cdata.get("name", ""),
                     description=cdata.get("description", ""),
                     policy_text=cdata.get("policy_text", ""),
@@ -208,8 +269,26 @@ class ReferenceDataValidator:
             try:
                 ind_codes = [ClinicalCode(**c) for c in idata.get("indication_codes", [])]
                 dosing = []
+                ind_name = idata.get("indication_name", "unknown")
                 for dr in idata.get("dosing_requirements", []):
-                    dosing.append(DosingRequirement(**dr))
+                    if isinstance(dr, str):
+                        # Gemini sometimes returns dosing as plain text strings
+                        dosing.append(DosingRequirement(
+                            indication=ind_name,
+                            phase="all",
+                            dose_unit="as_prescribed",
+                            route="as_prescribed",
+                            frequency="as_prescribed",
+                            notes=dr,
+                        ))
+                    elif isinstance(dr, dict):
+                        # Try direct construction first; if it fails, map Gemini's schema
+                        try:
+                            dosing.append(DosingRequirement(**dr))
+                        except Exception:
+                            dosing.append(self._map_dosing_dict(dr, ind_name))
+                    else:
+                        logger.warning("Unexpected dosing_requirements entry type", type=type(dr).__name__)
                 indications.append(IndicationCriteria(
                     indication_id=idata.get("indication_id", ""),
                     indication_name=idata.get("indication_name", ""),

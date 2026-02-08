@@ -1,6 +1,6 @@
 """Case management API routes."""
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.api.requests import CreateCaseRequest, ProcessCaseRequest, ConfirmDecisionRequest
@@ -38,26 +38,7 @@ async def create_case(
     """
     try:
         case_data = await case_service.create_case(request.patient_id)
-        return CaseResponse(
-            case_id=case_data["case_id"],
-            version=case_data["version"],
-            stage=case_data["stage"],
-            created_at=case_data["created_at"],
-            updated_at=case_data["updated_at"],
-            patient=case_data.get("patient"),
-            medication=case_data.get("medication"),
-            payer_states=case_data.get("payer_states", {}),
-            selected_strategy_id=case_data.get("selected_strategy_id"),
-            strategy_rationale=case_data.get("strategy_rationale"),
-            error_message=case_data.get("error_message"),
-            coverage_assessments=case_data.get("coverage_assessments"),
-            available_strategies=case_data.get("available_strategies"),
-            documentation_gaps=case_data.get("documentation_gaps"),
-            requires_human_decision=case_data.get("requires_human_decision"),
-            human_decision_reason=case_data.get("human_decision_reason"),
-            human_decisions=case_data.get("human_decisions"),
-            metadata=case_data.get("metadata")
-        )
+        return CaseResponse.from_dict(case_data)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
@@ -89,37 +70,19 @@ async def list_cases(
     try:
         stage_enum = CaseStage(stage) if stage else None
         cases = await case_service.list_cases(stage=stage_enum, limit=limit, offset=offset)
+        total = await case_service.count_cases(stage=stage_enum)
 
         return CaseListResponse(
-            cases=[
-                CaseResponse(
-                    case_id=c["case_id"],
-                    version=c["version"],
-                    stage=c["stage"],
-                    created_at=c["created_at"],
-                    updated_at=c["updated_at"],
-                    patient=c.get("patient"),
-                    medication=c.get("medication"),
-                    payer_states=c.get("payer_states", {}),
-                    selected_strategy_id=c.get("selected_strategy_id"),
-                    strategy_rationale=c.get("strategy_rationale"),
-                    error_message=c.get("error_message"),
-                    coverage_assessments=c.get("coverage_assessments"),
-                    available_strategies=c.get("available_strategies"),
-                    documentation_gaps=c.get("documentation_gaps"),
-                    requires_human_decision=c.get("requires_human_decision"),
-                    human_decision_reason=c.get("human_decision_reason"),
-                    human_decisions=c.get("human_decisions"),
-                    metadata=c.get("metadata")
-                )
-                for c in cases
-            ],
-            total=len(cases),
+            cases=[CaseResponse.from_dict(c) for c in cases],
+            total=total,
             limit=limit,
             offset=offset
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Error listing cases", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{case_id}", response_model=CaseResponse)
@@ -137,30 +100,16 @@ async def get_case(
     Returns:
         Case data
     """
-    case_data = await case_service.get_case(case_id)
-    if not case_data:
-        raise HTTPException(status_code=404, detail=f"Case not found: {case_id}")
-
-    return CaseResponse(
-        case_id=case_data["case_id"],
-        version=case_data["version"],
-        stage=case_data["stage"],
-        created_at=case_data["created_at"],
-        updated_at=case_data["updated_at"],
-        patient=case_data.get("patient"),
-        medication=case_data.get("medication"),
-        payer_states=case_data.get("payer_states", {}),
-        selected_strategy_id=case_data.get("selected_strategy_id"),
-        strategy_rationale=case_data.get("strategy_rationale"),
-        error_message=case_data.get("error_message"),
-        coverage_assessments=case_data.get("coverage_assessments"),
-        available_strategies=case_data.get("available_strategies"),
-        documentation_gaps=case_data.get("documentation_gaps"),
-        requires_human_decision=case_data.get("requires_human_decision"),
-        human_decision_reason=case_data.get("human_decision_reason"),
-        human_decisions=case_data.get("human_decisions"),
-        metadata=case_data.get("metadata")
-    )
+    try:
+        case_data = await case_service.get_case(case_id)
+        if not case_data:
+            raise HTTPException(status_code=404, detail=f"Case not found: {case_id}")
+        return CaseResponse.from_dict(case_data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error getting case", case_id=case_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{case_id}/process", response_model=CaseResponse)
@@ -194,26 +143,7 @@ async def process_case(
 
         case_data = await case_service.process_case(case_id)
 
-        return CaseResponse(
-            case_id=case_data["case_id"],
-            version=case_data["version"],
-            stage=case_data["stage"],
-            created_at=case_data["created_at"],
-            updated_at=case_data["updated_at"],
-            patient=case_data.get("patient"),
-            medication=case_data.get("medication"),
-            payer_states=case_data.get("payer_states", {}),
-            selected_strategy_id=case_data.get("selected_strategy_id"),
-            strategy_rationale=case_data.get("strategy_rationale"),
-            error_message=case_data.get("error_message"),
-            coverage_assessments=case_data.get("coverage_assessments"),
-            available_strategies=case_data.get("available_strategies"),
-            documentation_gaps=case_data.get("documentation_gaps"),
-            requires_human_decision=case_data.get("requires_human_decision"),
-            human_decision_reason=case_data.get("human_decision_reason"),
-            human_decisions=case_data.get("human_decisions"),
-            metadata=case_data.get("metadata")
-        )
+        return CaseResponse.from_dict(case_data)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -504,13 +434,13 @@ async def get_strategic_intelligence(
 
         # Generate strategic intelligence (with caching)
         agent = get_strategic_intelligence_agent()
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         insights = await agent.generate_strategic_intelligence(
             case_data=case_data,
             patient_data=patient_data,
             skip_cache=refresh
         )
-        elapsed_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
+        elapsed_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
         # Determine if result was from cache (fast response indicates cache hit)
         # A fresh generation with LLM call typically takes >500ms
@@ -528,7 +458,7 @@ async def get_strategic_intelligence(
 
         return {
             "case_id": case_id,
-            "analysis_timestamp": datetime.utcnow().isoformat(),
+            "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
             "cache_status": {
                 "from_cache": from_cache,
                 "cache_ttl_hours": agent.cache_ttl_hours,
@@ -601,8 +531,13 @@ async def delete_case(
     Returns:
         Deletion confirmation
     """
-    deleted = await case_service.delete_case(case_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail=f"Case not found: {case_id}")
-
-    return {"message": f"Case {case_id} deleted", "case_id": case_id}
+    try:
+        deleted = await case_service.delete_case(case_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Case not found: {case_id}")
+        return {"message": f"Case {case_id} deleted", "case_id": case_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error deleting case", case_id=case_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

@@ -2,17 +2,20 @@
 import json
 from pathlib import Path
 from typing import Optional, Dict, Any
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
+from backend.api.requests import UpdatePatientFieldRequest
+
 from backend.config.logging_config import get_logger
+from backend.config.settings import get_settings
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/patients", tags=["Patients"])
 
 # Base directory for patient data
-PATIENTS_DIR = Path("data/patients")
+PATIENTS_DIR = Path(get_settings().patients_dir)
 
 
 def _validate_patient_path(path: Path) -> None:
@@ -21,6 +24,85 @@ def _validate_patient_path(path: Path) -> None:
         path.resolve().relative_to(PATIENTS_DIR.resolve())
     except ValueError:
         raise HTTPException(status_code=403, detail="Access denied")
+
+
+@router.get("")
+async def list_available_patients() -> Dict[str, Any]:
+    """
+    List all available patients from the data directory.
+
+    Scans data/patients/ for JSON files and returns summary info
+    for each patient (demographics, payer, medication, diagnosis).
+    """
+    patients = []
+
+    for patient_file in sorted(PATIENTS_DIR.glob("*.json")):
+        try:
+            with open(patient_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            patient_id = patient_file.stem
+            demographics = data.get("demographics", {})
+            insurance = data.get("insurance", {})
+            medication = data.get("medication_request") or data.get("medication", {}) or {}
+            diagnoses_raw = data.get("diagnoses", [])
+
+            # Calculate age from DOB
+            dob = demographics.get("date_of_birth", "")
+            age = demographics.get("age")
+            if not age and dob:
+                from datetime import date
+                try:
+                    birth = date.fromisoformat(dob)
+                    today = date.today()
+                    age = today.year - birth.year - ((today.month, today.day) < (birth.month, birth.day))
+                except (ValueError, TypeError):
+                    pass
+
+            # Get primary diagnosis — diagnoses is a list of objects with rank field
+            condition = ""
+            icd10 = ""
+            if isinstance(diagnoses_raw, list):
+                primary_dx = next((d for d in diagnoses_raw if d.get("rank") == "primary"), None)
+                if not primary_dx and diagnoses_raw:
+                    primary_dx = diagnoses_raw[0]
+                if primary_dx:
+                    condition = primary_dx.get("description", "")
+                    icd10 = primary_dx.get("icd10_code", "")
+            elif isinstance(diagnoses_raw, dict):
+                primary_dx = diagnoses_raw.get("primary", {})
+                condition = primary_dx.get("description", "")
+                icd10 = primary_dx.get("icd10_code", "")
+
+            # Get payer
+            primary_ins = insurance.get("primary", {}) if isinstance(insurance, dict) else {}
+            payer_name = primary_ins.get("payer_name", "")
+
+            # Get medication — field is medication_request with medication_name and brand_name
+            med_name = medication.get("medication_name", "") or medication.get("name", "")
+            brand_name = medication.get("brand_name", "")
+            indication = medication.get("indication", "") or condition
+
+            patients.append({
+                "patient_id": patient_id,
+                "first_name": demographics.get("first_name", ""),
+                "last_name": demographics.get("last_name", ""),
+                "age": age,
+                "date_of_birth": dob,
+                "condition": condition,
+                "icd10_code": icd10,
+                "payer": payer_name,
+                "medication_name": brand_name or med_name,
+                "generic_name": medication.get("generic_name", med_name),
+                "indication": indication,
+            })
+        except Exception as e:
+            logger.warning("Failed to read patient file", file=str(patient_file), error=str(e))
+
+    return {
+        "patients": patients,
+        "total": len(patients),
+    }
 
 
 @router.get("/{patient_id}/data")
@@ -124,20 +206,17 @@ async def get_patient_document(patient_id: str, filename: str):
 @router.patch("/{patient_id}/data")
 async def update_patient_field(
     patient_id: str,
-    section: str = Query(..., description="Section path, e.g., 'demographics.first_name' or 'diagnoses.0.icd10_code'"),
-    value: str = Query(..., description="New value"),
-    reason: Optional[str] = Query(None, description="Reason for correction")
+    request: UpdatePatientFieldRequest,
 ) -> Dict[str, Any]:
     """
     Update a field in the patient data (for corrections during review).
 
-    This creates an audit trail of corrections made during the review step.
+    Uses a validated Pydantic request body instead of raw query params
+    to enforce type safety and prevent arbitrary JSON injection.
 
     Args:
         patient_id: Patient identifier
-        section: Dot-notation path to the field to update
-        value: New value for the field
-        reason: Optional reason for the correction
+        request: Validated update request with section path, value, and optional reason
 
     Returns:
         Updated field info with correction record
@@ -153,20 +232,20 @@ async def update_patient_field(
             data = json.load(f)
 
         # Navigate to the field and update
-        old_value = _get_nested_value(data, section)
-        _set_nested_value(data, section, value)
+        old_value = _get_nested_value(data, request.section)
+        _set_nested_value(data, request.section, request.value)
 
         # Record the correction in metadata
         if "corrections" not in data:
             data["corrections"] = []
 
-        from datetime import datetime
+        from datetime import datetime, timezone
         data["corrections"].append({
-            "field": section,
+            "field": request.section,
             "old_value": old_value,
-            "new_value": value,
-            "reason": reason,
-            "timestamp": datetime.utcnow().isoformat()
+            "new_value": request.value,
+            "reason": request.reason,
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
 
         # Save updated data
@@ -176,20 +255,20 @@ async def update_patient_field(
         logger.info(
             "Patient data field updated",
             patient_id=patient_id,
-            field=section,
+            field=request.section,
             old_value=old_value,
-            new_value=value
+            new_value=request.value
         )
 
         return {
             "success": True,
-            "field": section,
+            "field": request.section,
             "old_value": old_value,
-            "new_value": value,
+            "new_value": request.value,
             "correction_recorded": True
         }
-    except KeyError as e:
-        raise HTTPException(status_code=400, detail=f"Field not found: {section}")
+    except KeyError:
+        raise HTTPException(status_code=400, detail=f"Field not found: {request.section}")
     except Exception as e:
         logger.error("Error updating patient data", patient_id=patient_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")

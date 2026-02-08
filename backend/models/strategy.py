@@ -1,6 +1,6 @@
 """Strategy models for access pathway selection."""
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Literal
 from uuid import uuid4
 
@@ -20,7 +20,7 @@ class AppealStrategy(BaseModel):
     appeal_strategy_id: str = Field(default_factory=lambda: str(uuid4()))
     case_id: str = Field(..., description="Case this appeal is for")
     payer_name: str = Field(..., description="Payer being appealed")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Denial context
     denial_reason_code: str = Field(..., description="Denial reason code")
@@ -95,7 +95,7 @@ class CounterfactualAnalysis(BaseModel):
     analysis_id: str = Field(default_factory=lambda: str(uuid4()))
     case_id: str = Field(..., description="Case being analyzed")
     selected_strategy_id: str = Field(..., description="Actually selected strategy")
-    analyzed_at: datetime = Field(default_factory=datetime.utcnow)
+    analyzed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Alternative outcomes
     alternatives: List[Dict[str, Any]] = Field(
@@ -126,7 +126,7 @@ class RecoveryStrategy(BaseModel):
     recovery_strategy_id: str = Field(default_factory=lambda: str(uuid4()))
     case_id: str = Field(..., description="Case this recovery is for")
     payer_name: str = Field(..., description="Payer with the issue")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Root cause
     failure_type: Literal[
@@ -198,7 +198,7 @@ class Strategy(BaseModel):
     strategy_type: StrategyType = Field(..., description="Type of strategy")
     name: str = Field(..., description="Human-readable strategy name")
     description: str = Field(..., description="Detailed description of the strategy")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Payer sequence
     payer_sequence: List[str] = Field(..., description="Order of payers to approach")
@@ -223,7 +223,7 @@ class StrategyScore(BaseModel):
     """Calculated score for a strategy applied to a specific case."""
     strategy_id: str = Field(..., description="ID of the strategy being scored")
     case_id: str = Field(..., description="ID of the case")
-    scored_at: datetime = Field(default_factory=datetime.utcnow)
+    scored_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Component scores (adjusted for case)
     speed_score: float = Field(..., ge=0.0, le=10.0)

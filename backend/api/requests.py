@@ -76,6 +76,27 @@ class ConfirmDecisionRequest(BaseModel):
     notes: Optional[str] = Field(default=None, description="Additional notes")
 
 
+class UpdatePatientFieldRequest(BaseModel):
+    """Request to update a patient data field (for corrections during review)."""
+    section: str = Field(
+        ...,
+        description="Dot-notation path to the field, e.g., 'demographics.first_name'",
+        min_length=1,
+        max_length=200,
+        pattern=r'^[a-zA-Z0-9_.]+$'
+    )
+    value: str = Field(
+        ...,
+        description="New value for the field",
+        max_length=2000
+    )
+    reason: Optional[str] = Field(
+        default=None,
+        description="Reason for correction",
+        max_length=500
+    )
+
+
 class RequestP2PRequest(BaseModel):
     """Request for peer-to-peer review."""
     case_id: str = Field(..., description="Case identifier")

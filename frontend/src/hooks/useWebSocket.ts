@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { CaseWebSocket } from '@/services/websocket'
 import { QUERY_KEYS } from '@/lib/constants'
-import type { WebSocketMessage, CaseUpdatedMessage, StageChangedMessage } from '@/types/api'
+import type { WebSocketMessage, StageUpdateMessage } from '@/types/api'
 
 interface UseWebSocketOptions {
   onMessage?: (message: WebSocketMessage) => void
@@ -37,36 +37,42 @@ export function useWebSocket(caseId: string | undefined, options: UseWebSocketOp
     setLastMessage(message)
     onMessageRef.current?.(message)
 
-    // Handle specific message types
+    // Handle backend event types (normalized from "event" field)
+    const caseId = message.case_id
     switch (message.type) {
-      case 'case_updated': {
-        const msg = message as CaseUpdatedMessage
-        // Update case in cache
-        queryClient.setQueryData(QUERY_KEYS.case(message.case_id), {
-          case: msg.data.case
-        })
-        // Invalidate cases list
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.cases })
+      case 'stage_update': {
+        const msg = message as StageUpdateMessage
+        if (msg.previous_stage && msg.stage) {
+          onStageChangeRef.current?.(msg.previous_stage, msg.stage)
+        }
+        // Invalidate case data so TanStack Query refetches
+        if (caseId) {
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.case(caseId) })
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.cases })
+        }
         break
       }
 
-      case 'stage_changed': {
-        const msg = message as StageChangedMessage
-        onStageChangeRef.current?.(msg.data.previous_stage, msg.data.new_stage)
-        // Update case in cache
-        queryClient.setQueryData(QUERY_KEYS.case(message.case_id), {
-          case: msg.data.case
-        })
+      case 'processing_completed': {
+        // Refetch all case-related data after processing finishes
+        if (caseId) {
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.case(caseId) })
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.strategies(caseId) })
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.cases })
+        }
         break
       }
 
-      case 'strategy_selected': {
-        // Invalidate strategies query
-        queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.strategies(message.case_id)
-        })
+      case 'processing_error':
+      case 'error': {
+        // Refetch to get latest state after error
+        if (caseId) {
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.case(caseId) })
+        }
         break
       }
+
+      // heartbeat and connected are handled silently
     }
   }, [queryClient])
 

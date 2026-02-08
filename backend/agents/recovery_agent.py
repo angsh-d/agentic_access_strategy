@@ -481,7 +481,11 @@ class RecoveryAgent:
             recommended_appeal_type=result.get("appeal_type", "standard"),
             urgency_justification=result.get("urgency_justification"),
             peer_to_peer_talking_points=result.get("p2p_points"),
-            success_probability=result.get("success_probability", 0.5),
+            success_probability=(
+                result.get("success_probability", {}).get("estimated_success_rate", 0.5)
+                if isinstance(result.get("success_probability"), dict)
+                else result.get("success_probability", 0.5)
+            ),
             success_probability_reasoning=result.get("success_reasoning", ""),
             key_risks=result.get("risks", []),
             fallback_strategies=result.get("fallbacks", [])

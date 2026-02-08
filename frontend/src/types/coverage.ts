@@ -1,6 +1,24 @@
 /**
- * Coverage status for a criterion
+ * Overall coverage status — matches backend CoverageStatus enum exactly.
+ * Conservative decision model: AI never recommends denial.
+ * NOT_COVERED and REQUIRES_HUMAN_REVIEW always need human review.
  */
+export type BackendCoverageStatus =
+  | 'covered'              // All criteria met
+  | 'likely_covered'       // High confidence, may need PA
+  | 'requires_pa'          // Coverage with prior auth
+  | 'conditional'          // Coverage with specific conditions
+  | 'pend'                 // Needs additional documentation (not denial)
+  | 'not_covered'          // Policy doesn't cover — REQUIRES HUMAN REVIEW
+  | 'requires_human_review' // AI cannot determine — human must decide
+  | 'unknown'              // Insufficient information
+
+/**
+ * Criterion-level status for display (derived from backend is_met boolean)
+ */
+export type CriterionStatus = 'met' | 'not_met' | 'pending'
+
+/** @deprecated Use BackendCoverageStatus for overall, CriterionStatus for criteria */
 export type CoverageStatus = 'met' | 'not_met' | 'partial' | 'unknown'
 
 /**
@@ -12,12 +30,21 @@ export type GapSeverity = 'critical' | 'high' | 'medium' | 'low'
  * Individual criterion assessment
  */
 export interface CriterionAssessment {
-  id: string
-  name: string
-  description: string
-  status: CoverageStatus
+  // Backend-native fields (primary — from CriterionAssessment model)
+  criterion_id?: string
+  criterion_name?: string
+  criterion_description?: string
+  is_met?: boolean
   confidence: number
-  evidence: string[]
+  supporting_evidence?: string[]
+  gaps?: string[]
+  reasoning?: string
+  // Frontend-native fields (fallback aliases)
+  id?: string
+  name?: string
+  description?: string
+  status?: CriterionStatus | CoverageStatus
+  evidence?: string[]
   missing_documentation?: string[]
   recommendation?: string
 }
@@ -65,9 +92,9 @@ export interface CoverageAssessment {
   payer_name: string
   medication_name?: string
   assessment_date?: string
-  // Status fields
-  overall_status?: CoverageStatus
-  coverage_status?: string  // Backend uses this field name
+  // Status fields — backend sends coverage_status as BackendCoverageStatus
+  overall_status?: CoverageStatus  // deprecated: use coverage_status
+  coverage_status?: BackendCoverageStatus
   overall_confidence?: number
   approval_likelihood: number
   approval_likelihood_reasoning?: string

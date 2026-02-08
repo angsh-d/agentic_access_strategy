@@ -478,8 +478,14 @@ class DigitizedPolicy(BaseModel):
 
         return [self.atomic_criteria[cid] for cid in criteria_ids if cid in self.atomic_criteria]
 
-    def _collect_criteria_ids(self, group_id: str, collected: set):
-        """Recursively collect all criterion IDs from a group."""
+    def _collect_criteria_ids(self, group_id: str, collected: set, visited: Optional[set] = None):
+        """Recursively collect all criterion IDs from a group with cycle detection."""
+        if visited is None:
+            visited = set()
+        if group_id in visited:
+            return
+        visited.add(group_id)
+
         group = self.criterion_groups.get(group_id)
         if not group:
             return
@@ -488,4 +494,4 @@ class DigitizedPolicy(BaseModel):
             collected.add(cid)
 
         for subgroup_id in group.subgroups:
-            self._collect_criteria_ids(subgroup_id, collected)
+            self._collect_criteria_ids(subgroup_id, collected, visited)

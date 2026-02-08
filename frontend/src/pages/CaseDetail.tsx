@@ -73,7 +73,8 @@ import {
 } from '@/hooks/usePatientData'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { formatDate, getInitials, cn } from '@/lib/utils'
-import type { Strategy } from '@/types/strategy'
+import type { Strategy, BackendStrategy } from '@/types/strategy'
+import { transformBackendStrategy } from '@/types/strategy'
 import type { CaseState, CaseStage, PayerState, HumanDecision } from '@/types/case'
 
 // Helper to get patient full name
@@ -99,48 +100,17 @@ function transformToCriteriaResultsForPayer(caseState: CaseState, payerName: str
   const results: CriterionResult[] = []
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const criteriaDetails = (assessment as any)?.criteria_details
-  if (criteriaDetails) {
+  const criteriaDetails = (assessment as any)?.criteria_details ?? (assessment as any)?.criteria_assessments
+  if (criteriaDetails && Array.isArray(criteriaDetails)) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     criteriaDetails.forEach((detail: any, idx: number) => {
       results.push({
         id: `crit-${payerName}-${idx}`,
         name: detail.criterion_name || `Criterion ${idx + 1}`,
-        status: detail.met === true ? 'met' : detail.met === false ? 'not_met' : detail.partial ? 'partial' : 'unknown',
+        status: detail.is_met === true || detail.met === true ? 'met' : detail.is_met === false || detail.met === false ? 'not_met' : detail.partial ? 'partial' : 'unknown',
         detail: detail.reasoning || detail.description,
-        source: detail.source,
-        actionNeeded: detail.action_needed,
-      })
-    })
-  } else {
-    // Generate from common PA requirements
-    const commonCriteria = [
-      { name: 'Diagnosis Verification', desc: 'Confirmed diagnosis with ICD-10 code' },
-      { name: 'Prior Treatment History', desc: 'Documentation of prior conventional therapy' },
-      { name: 'Age/Indication Match', desc: 'Patient meets age and indication requirements' },
-      { name: 'Safety Screenings', desc: 'Required TB screening and safety labs' },
-      { name: 'Specialist Authorization', desc: 'Prescription from qualified specialist' },
-    ]
-
-    const metCount = assessment?.criteria_met_count || 0
-    const totalCount = assessment?.criteria_total_count || commonCriteria.length
-    const likelihood = assessment?.approval_likelihood || 0.5
-
-    commonCriteria.slice(0, totalCount).forEach((crit, idx) => {
-      let status: 'met' | 'partial' | 'not_met' | 'unknown' = 'unknown'
-      if (idx < metCount) {
-        status = 'met'
-      } else if (idx === metCount && likelihood > 0.5) {
-        status = 'partial'
-      } else if (idx > metCount) {
-        status = likelihood > 0.3 ? 'partial' : 'not_met'
-      }
-
-      results.push({
-        id: `crit-${payerName}-${idx}`,
-        name: crit.name,
-        status,
-        detail: crit.desc,
+        source: detail.source || detail.supporting_evidence?.join('; '),
+        actionNeeded: detail.action_needed || (detail.gaps?.length ? detail.gaps.join('; ') : undefined),
       })
     })
   }
@@ -184,27 +154,8 @@ export function CaseDetail() {
   const caseState = caseData?.case
 
   // Use strategies from caseState.available_strategies
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const strategies: Strategy[] = ((caseState?.available_strategies ?? []) as any[]).map((s: any) => ({
-    id: s.strategy_id,
-    type: s.strategy_type as Strategy['type'],
-    name: s.name,
-    description: s.description,
-    is_recommended: s.is_recommended ?? false,
-    score: {
-      total_score: (s.base_approval_score || 0) / 10,
-      approval_probability: (s.base_approval_score || 0) / 10,
-      days_to_therapy: Math.round((1 - (s.base_speed_score || 0) / 10) * 10) + 3,
-      rework_risk: (s.base_rework_risk || 0) / 10,
-      cost_efficiency: (1 - (s.base_patient_burden || 0) / 10),
-      criteria: [],
-    },
-    actions: [],
-    estimated_days: Math.round((1 - (s.base_speed_score || 5) / 10) * 10) + 3,
-    confidence_range: { low: 0.5, high: 0.8 },
-    risks: s.risk_factors || [],
-    advantages: [s.rationale || ''],
-  }))
+  // available_strategies comes from API as BackendStrategy[] shape but is typed as Strategy[] in CaseState
+  const strategies: Strategy[] = ((caseState?.available_strategies ?? []) as unknown as BackendStrategy[]).map(transformBackendStrategy)
 
   const recommendedStrategyId = strategies.find(s => s.is_recommended)?.id
     ?? (caseState?.stage === 'strategy_selection' ? caseState?.selected_strategy_id : undefined)
@@ -253,9 +204,26 @@ export function CaseDetail() {
     try {
       await approveStage.mutateAsync(stage)
       setCurrentAnalysis(null)
-      refetchCase()
+      await refetchCase()
     } catch (error) {
       console.error('Failed to approve stage:', error)
+    }
+  }
+
+  // Combined handler: approve intake and auto-run policy analysis (LLM)
+  const handleApproveIntakeAndRunAnalysis = async () => {
+    try {
+      // First approve the intake stage
+      await approveStage.mutateAsync('intake')
+      setCurrentAnalysis(null)
+      // Refresh to get updated stage
+      await refetchCase()
+      // Then automatically run policy analysis (LLM call)
+      const analysis = await runStage.mutateAsync('policy_analysis')
+      setCurrentAnalysis(analysis as StageAnalysis)
+      await refetchCase()
+    } catch (error) {
+      console.error('Failed to approve intake and run analysis:', error)
     }
   }
 
@@ -269,7 +237,7 @@ export function CaseDetail() {
       await refetchCase()
       // Then automatically run strategy generation
       await runStage.mutateAsync('strategy_generation')
-      refetchCase()
+      await refetchCase()
     } catch (error) {
       console.error('Failed to approve analysis and generate strategy:', error)
     }
@@ -279,7 +247,7 @@ export function CaseDetail() {
     try {
       await selectStrategy.mutateAsync({ strategy_id: strategyId })
       setCurrentAnalysis(null)
-      refetchCase()
+      await refetchCase()
     } catch (error) {
       console.error('Failed to select strategy:', error)
     }
@@ -294,7 +262,7 @@ export function CaseDetail() {
         notes: decisionReason || undefined,
       })
       setDecisionReason('')
-      refetchCase()
+      await refetchCase()
     } catch (error) {
       console.error('Failed to confirm decision:', error)
     }
@@ -417,7 +385,7 @@ export function CaseDetail() {
               <ReviewStep
                 key="review"
                 caseState={caseState}
-                onContinue={() => handleApproveStage('intake')}
+                onContinue={handleApproveIntakeAndRunAnalysis}
                 isProcessing={isProcessing}
                 readOnly={isCompleted}
               />
@@ -434,6 +402,7 @@ export function CaseDetail() {
                 onApprove={handleApproveAnalysisAndGenerateStrategy}
                 isProcessing={isProcessing}
                 readOnly={isCompleted}
+                onRefresh={refetchCase}
               />
             )}
 
@@ -595,22 +564,19 @@ function ReviewStep({
     return (
       <WizardStep
         title="Verify Extracted Data"
-        description="Unable to load patient data"
+        description="Unable to load patient data — cannot proceed without verified data"
         icon={<FileText className="w-6 h-6" />}
-        primaryAction={{
-          label: 'Continue Anyway',
-          onClick: onContinue,
-          disabled: isProcessing,
-          icon: <ChevronRight className="w-4 h-4" />,
-        }}
       >
         <div className="p-6 bg-grey-50 rounded-xl border border-grey-200 text-center">
           <AlertTriangle className="w-8 h-8 text-grey-400 mx-auto mb-3" />
           <p className="text-sm text-grey-600 mb-2">
-            Could not load detailed patient data.
+            Could not load patient data. Coverage assessment requires verified patient information.
           </p>
           <p className="text-xs text-grey-400">
             {error instanceof Error ? error.message : 'Unknown error'}
+          </p>
+          <p className="text-xs text-grey-500 mt-3">
+            Please retry or select a different patient.
           </p>
         </div>
       </WizardStep>
@@ -689,11 +655,12 @@ function ReviewStep({
 function AnalysisStep({
   caseState,
   assessment: _assessment,
-  currentAnalysis: _currentAnalysis,
-  onRunAnalysis: _onRunAnalysis,
+  currentAnalysis,
+  onRunAnalysis,
   onApprove,
   isProcessing,
   readOnly = false,
+  onRefresh,
 }: {
   caseState: CaseState
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -703,7 +670,29 @@ function AnalysisStep({
   onApprove: () => void
   isProcessing: boolean
   readOnly?: boolean
+  onRefresh?: () => void
 }) {
+  // Force-refresh case data on mount to ensure we have the latest from backend
+  const refreshed = useRef(false)
+  useEffect(() => {
+    if (!refreshed.current && onRefresh) {
+      refreshed.current = true
+      onRefresh()
+    }
+  }, [onRefresh])
+
+  // Auto-trigger LLM analysis when step mounts if no analysis results exist
+  const hasAnalysisResults = !!(caseState.coverage_assessments && Object.keys(caseState.coverage_assessments).length > 0)
+  const analysisTriggered = useRef(false)
+  const onRunAnalysisRef = useRef(onRunAnalysis)
+  useEffect(() => { onRunAnalysisRef.current = onRunAnalysis }, [onRunAnalysis])
+
+  useEffect(() => {
+    if (!readOnly && !hasAnalysisResults && !isProcessing && !analysisTriggered.current) {
+      analysisTriggered.current = true
+      onRunAnalysisRef.current()
+    }
+  }, [readOnly, hasAnalysisResults, isProcessing])
   // Check for secondary payer
   const primaryPayerName = caseState.patient.primary_payer
   const secondaryPayerName = caseState.patient.secondary_payer
@@ -773,12 +762,88 @@ function AnalysisStep({
         </div>
       )}
 
+      {/* LLM Analysis Status */}
+      {isProcessing && !hasAnalysisResults && (
+        <div className="mb-6 p-4 rounded-xl bg-semantic-info/[0.08] border border-semantic-info/20">
+          <div className="flex items-center gap-3">
+            <Loader2 className="w-5 h-5 text-semantic-info animate-spin" />
+            <div>
+              <h4 className="text-sm font-semibold text-grey-900">AI Analysis in Progress</h4>
+              <p className="text-xs text-grey-600 mt-0.5">Claude is analyzing payer policies and identifying documentation gaps...</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Analysis Summary (from LLM) */}
+      {currentAnalysis && (
+        <div className="mb-6 p-4 rounded-xl bg-semantic-success/[0.08] border border-semantic-success/20">
+          <div className="flex items-start gap-3">
+            <Brain className="w-5 h-5 text-semantic-success flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="text-sm font-semibold text-grey-900 mb-1">AI Analysis Complete</h4>
+              <p className="text-sm text-grey-700">{currentAnalysis.reasoning}</p>
+              {currentAnalysis.recommendations && currentAnalysis.recommendations.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {currentAnalysis.recommendations.map((rec: string, idx: number) => (
+                    <li key={idx} className="text-xs text-grey-600 flex items-start gap-1.5">
+                      <Lightbulb className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+                      {rec}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Re-analyze button (if analysis was already done) */}
+      {!readOnly && hasAnalysisResults && !isProcessing && (
+        <div className="mb-4 flex justify-end">
+          <button
+            type="button"
+            onClick={onRunAnalysis}
+            className="text-xs text-grey-500 hover:text-grey-700 flex items-center gap-1.5 transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Re-analyze policies
+          </button>
+        </div>
+      )}
+
       {/* Policy Validation Card - Always show detailed criteria */}
       <PolicyValidationCard
         patientId={caseState.metadata?.source_patient_id as string}
         payerName={selectedPayerName || primaryPayerName}
         medicationName={caseState.medication.medication_name}
+        coverageAssessment={caseState.coverage_assessments?.[selectedPayerName || primaryPayerName]}
       />
+
+      {/* Documentation Gaps from AI Analysis */}
+      {caseState.documentation_gaps && caseState.documentation_gaps.length > 0 && (
+        <div className="mt-6 p-4 rounded-xl bg-semantic-warning/[0.08] border border-semantic-warning/20">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-semantic-warning flex-shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-sm font-semibold text-grey-900 mb-2">Documentation Gaps Identified</h4>
+              <ul className="space-y-2">
+                {caseState.documentation_gaps.map((gap, idx) => (
+                  <li key={idx} className="text-sm text-grey-700 flex items-start gap-2">
+                    <span className={cn(
+                      'mt-0.5 px-1.5 py-0.5 text-[10px] font-semibold uppercase rounded',
+                      (gap as any).priority === 'high' ? 'bg-semantic-error/10 text-semantic-error' : 'bg-semantic-warning/10 text-semantic-warning'
+                    )}>
+                      {(gap as any).priority || 'medium'}
+                    </span>
+                    <span>{gap.description}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Payer Comparison Summary (if secondary payer exists) */}
       {hasSecondaryPayer && secondarySummary && (
@@ -1250,6 +1315,8 @@ function SubmitStep({
   }, [isWaitingForRefresh, isMonitoring, hasSubmissions, hasError])
 
   const handleManualSubmit = async () => {
+    if (hasAutoSubmitted.current) return
+    hasAutoSubmitted.current = true
     setIsWaitingForRefresh(true)
     setHasTimedOut(false)
     timeoutRef.current = setTimeout(() => {
@@ -1272,22 +1339,9 @@ function SubmitStep({
     }
   }
 
-  // Auto-submit when reaching this step (if not already submitted/monitoring)
-  useEffect(() => {
-    if (
-      !hasAutoSubmitted.current &&
-      !isMonitoring &&
-      !hasSubmissions &&
-      !isProcessing &&
-      !hasError &&
-      !hasTimedOut &&
-      caseState.stage === 'action_coordination'
-    ) {
-      hasAutoSubmitted.current = true
-      handleManualSubmit()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMonitoring, hasSubmissions, isProcessing, hasError, hasTimedOut, caseState.stage])
+  // Auto-submit DISABLED: PA submissions require explicit user confirmation
+  // to prevent accidental submissions. User must click "Submit" button.
+  // Previously auto-submitted when reaching this step.
 
   // Cleanup timeout on unmount
   useEffect(() => {

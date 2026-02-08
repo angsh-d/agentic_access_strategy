@@ -6,7 +6,6 @@ import {
   TrendingDown,
   Minus,
   Brain,
-  Lightbulb,
   Sparkles,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'

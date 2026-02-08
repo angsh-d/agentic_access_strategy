@@ -23,10 +23,10 @@ const statusConfig: Record<PayerStatus, {
   pending_info: { label: 'Info Requested', weight: 'medium' },
   under_review: { label: 'Under Review', weight: 'medium' },
   approved: { label: 'Approved', weight: 'heavy' },
-  denied: { label: 'Denied', weight: 'medium' },
+  denied: { label: 'Denied', weight: 'heavy' },
   appeal_submitted: { label: 'Appeal Submitted', weight: 'medium' },
   appeal_approved: { label: 'Appeal Approved', weight: 'heavy' },
-  appeal_denied: { label: 'Appeal Denied', weight: 'medium' },
+  appeal_denied: { label: 'Appeal Denied', weight: 'heavy' },
 }
 
 export function PayerStatusBadge({
@@ -34,16 +34,19 @@ export function PayerStatusBadge({
   showDot = true,
   pulse = false
 }: PayerStatusBadgeProps) {
-  const config = statusConfig[status]
+  const config = statusConfig[status] ?? { label: status?.replace(/_/g, ' ') || 'Unknown', weight: 'light' as const }
   const shouldPulse = pulse || (status === 'submitted' || status === 'under_review' || status === 'appeal_submitted')
   const isApproved = status === 'approved' || status === 'appeal_approved'
+  const isDenied = status === 'denied' || status === 'appeal_denied'
 
   return (
     <span
       className={cn(
         'inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs',
-        // Background based on weight
-        config.weight === 'heavy' && 'bg-grey-900 text-white',
+        // Denied states: distinct outline style (NOT same as approved)
+        isDenied && 'bg-white border-2 border-grey-900 text-grey-900',
+        // Approved states: solid dark
+        !isDenied && config.weight === 'heavy' && 'bg-grey-900 text-white',
         config.weight === 'medium' && 'bg-grey-200 text-grey-700',
         config.weight === 'light' && 'bg-grey-100 text-grey-500',
         // Pulse animation for in-progress states
@@ -55,8 +58,9 @@ export function PayerStatusBadge({
           className={cn(
             'w-1.5 h-1.5 rounded-full',
             isApproved && 'bg-white',
-            !isApproved && config.weight === 'medium' && 'bg-grey-500',
-            !isApproved && config.weight === 'light' && 'bg-grey-400'
+            isDenied && 'bg-grey-900',
+            !isApproved && !isDenied && config.weight === 'medium' && 'bg-grey-500',
+            !isApproved && !isDenied && config.weight === 'light' && 'bg-grey-400'
           )}
         />
       )}

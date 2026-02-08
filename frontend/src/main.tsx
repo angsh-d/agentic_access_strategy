@@ -16,7 +16,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       persistOptions={persistOptions}
       onSuccess={() => {
         // Cache restored from IndexedDB successfully
-        console.log('Query cache restored from IndexedDB')
       }}
     >
       <App />
